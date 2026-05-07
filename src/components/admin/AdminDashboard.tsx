@@ -47,12 +47,12 @@ import {
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { useAuth } from '../../lib/AuthContext';
+import { useAuthStore } from '../../store/useAuthStore';
 import { Ticket } from '../../types';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const { logout, user: currentUser, token } = useAuth();
+  const { logout, user: currentUser, token } = useAuthStore();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState('inbox');
   const [adminSearch, setAdminSearch] = useState('');

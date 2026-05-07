@@ -1,14 +1,15 @@
 
 import { useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useAuth } from '../lib/AuthContext';
+import { useAuthStore } from '../store/useAuthStore';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 
 export default function SecureLoginView() {
-  const { token } = useParams();
+  const { token: urlToken } = useParams();
   const navigate = useNavigate();
-  const { login, logout, isAuthenticated, user: authUser } = useAuth();
+  const { login, token: authToken } = useAuthStore();
+  const isAuthenticated = !!authToken;
 
   const hasAttempted = useRef(false);
 
@@ -21,7 +22,7 @@ export default function SecureLoginView() {
         const res = await fetch('/api/auth/login-secure', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token })
+          body: JSON.stringify({ token: urlToken })
         });
 
         if (res.ok) {
@@ -54,10 +55,10 @@ export default function SecureLoginView() {
       }
     };
 
-    if (token) {
+    if (urlToken) {
       performSecureLogin();
     }
-  }, [token, login, navigate]);
+  }, [urlToken, login, navigate]);
 
   return (
     <div className="h-screen flex items-center justify-center bg-slate-50">

@@ -54,7 +54,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { getSocket } from '../../lib/socket';
-import { useAuth } from '../../lib/AuthContext';
+import { useAuthStore } from '../../store/useAuthStore';
 
 interface CannedResponse {
   id: string;
@@ -70,7 +70,7 @@ interface Props {
 export default function TicketDetailView({ portal }: Props) {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, token } = useAuth();
+  const { user, token } = useAuthStore();
   const [messages, setMessages] = useState<Message[]>([]);
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [newMessage, setNewMessage] = useState('');

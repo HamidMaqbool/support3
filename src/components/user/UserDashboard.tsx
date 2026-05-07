@@ -40,14 +40,14 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
-import { useAuth } from '../../lib/AuthContext';
+import { useAuthStore } from '../../store/useAuthStore';
 import { getSocket } from '../../lib/socket';
 import { Ticket } from '../../types';
 
 export default function UserDashboard() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user: authUser, token, logout } = useAuth();
+  const { user: authUser, token, logout } = useAuthStore();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');

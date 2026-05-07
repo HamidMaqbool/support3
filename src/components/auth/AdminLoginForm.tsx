@@ -3,14 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { LogIn, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useAuth } from '../../lib/AuthContext';
+import { useAuthStore } from '../../store/useAuthStore';
 import { toast } from 'sonner';
 
 export default function AdminLoginForm() {
   const [email, setEmail] = useState('admin@techlyse.com');
   const [password, setPassword] = useState('admin123');
   const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuth();
+  const { login } = useAuthStore();
   const navigate = useNavigate();
 
   const handleLogin = async (e: FormEvent) => {

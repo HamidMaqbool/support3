@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ReactNode } from 'react';
+import { useEffect, ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from '@/components/ui/sonner';
 import UserDashboard from './components/user/UserDashboard';
@@ -12,10 +12,11 @@ import TicketDetailView from './components/shared/TicketDetailView';
 import LandingPage from './components/LandingPage';
 import LoginView from './components/LoginView';
 import SecureLoginView from './components/SecureLoginView';
-import { AuthProvider, useAuth } from './lib/AuthContext';
+import { useAuthStore } from './store/useAuthStore';
 
 function ProtectedRoute({ children, role }: { children: ReactNode, role?: 'user' | 'admin' | 'support' | 'staff' }) {
-  const { isAuthenticated, user } = useAuth();
+  const { user, token } = useAuthStore();
+  const isAuthenticated = !!token;
   
   console.log("Auth Debug:", { isAuthenticated, user, requiredRole: role });
 
@@ -31,10 +32,15 @@ function ProtectedRoute({ children, role }: { children: ReactNode, role?: 'user'
 }
 
 export default function App() {
+  const { token, refreshProfile } = useAuthStore();
+
+  useEffect(() => {
+    refreshProfile();
+  }, [token, refreshProfile]);
+
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
+    <BrowserRouter>
+      <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/admin/login" element={<LoginView />} />
           <Route path="/login" element={<Navigate to="/admin/login" replace />} />
@@ -53,6 +59,5 @@ export default function App() {
         </Routes>
         <Toaster position="top-right" />
       </BrowserRouter>
-    </AuthProvider>
   );
 }
