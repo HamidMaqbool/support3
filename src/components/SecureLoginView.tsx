@@ -31,14 +31,16 @@ export default function SecureLoginView() {
           localStorage.setItem('techlyse_token', data.token);
           localStorage.setItem('techlyse_user', JSON.stringify(data.user));
           
-          // Also call login to update state for other components
-          login(data.token, data.user);
-          
           toast.success('Secure login successful');
           
           // Use a hard redirect for magic link login to ensure clean state across all components
+          // Doing this via window.location.replace avoids history clutter and ensures full app re-init
           const destination = data.user.role === 'admin' ? '/admin' : '/user';
-          window.location.href = destination;
+          
+          // Small delay ensures toast can be seen (briefly) and storage is settled
+          setTimeout(() => {
+            window.location.replace(destination);
+          }, 100);
         } else {
           // @ts-ignore - catch block handles parsing
           toast.error('The secure link has expired or is invalid. Please go back to the main app and open support again to generate a new session.', { 
