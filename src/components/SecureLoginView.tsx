@@ -28,8 +28,8 @@ export default function SecureLoginView() {
           const data = await res.json();
           
           // Use localStorage directly to ensure it's there before we do anything else
-          localStorage.setItem('zenith_token', data.token);
-          localStorage.setItem('zenith_user', JSON.stringify(data.user));
+          localStorage.setItem('techlyse_token', data.token);
+          localStorage.setItem('techlyse_user', JSON.stringify(data.user));
           
           // Also call login to update state for other components
           login(data.token, data.user);

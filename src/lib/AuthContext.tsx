@@ -21,11 +21,11 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(() => {
-    const savedUser = localStorage.getItem('zenith_user');
+    const savedUser = localStorage.getItem('techlyse_user');
     return savedUser ? JSON.parse(savedUser) : null;
   });
   const [token, setToken] = useState<string | null>(() => {
-    return localStorage.getItem('zenith_token');
+    return localStorage.getItem('techlyse_token');
   });
 
   useEffect(() => {
@@ -38,7 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (response.ok) {
             const data = await response.json();
             setUser(data);
-            localStorage.setItem('zenith_user', JSON.stringify(data));
+            localStorage.setItem('techlyse_user', JSON.stringify(data));
           } else if (response.status === 401 || response.status === 403) {
             logout();
           }
@@ -54,15 +54,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = (newToken: string, newUser: User) => {
     setToken(newToken);
     setUser(newUser);
-    localStorage.setItem('zenith_token', newToken);
-    localStorage.setItem('zenith_user', JSON.stringify(newUser));
+    localStorage.setItem('techlyse_token', newToken);
+    localStorage.setItem('techlyse_user', JSON.stringify(newUser));
   };
 
   const logout = () => {
     setToken(null);
     setUser(null);
-    localStorage.removeItem('zenith_token');
-    localStorage.removeItem('zenith_user');
+    localStorage.removeItem('techlyse_token');
+    localStorage.removeItem('techlyse_user');
   };
 
   return (

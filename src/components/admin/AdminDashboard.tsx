@@ -482,7 +482,7 @@ export default function AdminDashboard() {
                 <LifeBuoy className="w-5 h-5 text-white" />
              </div>
              {isSidebarOpen && (
-               <span className="font-bold text-lg text-white tracking-tight">ZENITH<span className="font-light text-slate-400">{currentUser?.role === 'admin' ? 'ADMIN' : 'SUPPORT'}</span></span>
+               <span className="font-bold text-lg text-white tracking-tight">TECHLYSE<span className="font-light text-slate-400">{currentUser?.role === 'admin' ? 'ADMIN' : 'SUPPORT'}</span></span>
              )}
           </div>
         </div>

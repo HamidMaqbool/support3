@@ -19,7 +19,7 @@ export default function LandingPage() {
           <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-white shadow-lg shadow-slate-900/20">
             <LifeBuoy size={24} />
           </div>
-          <span className="text-xl font-bold tracking-tight text-slate-900">ZenithDesk</span>
+          <span className="text-xl font-bold tracking-tight text-slate-900">TechlyseDesk</span>
         </div>
         <div className="text-xs font-bold text-slate-400 uppercase tracking-widest hidden sm:block">
           Support Operations Center
@@ -38,7 +38,7 @@ export default function LandingPage() {
               Systems Operational
             </div>
             <h1 className="text-6xl md:text-8xl font-black text-slate-900 leading-tight mb-8 tracking-tighter">
-              Zenith<span className="text-slate-300 font-light italic">Desk</span>
+              Techlyse<span className="text-slate-300 font-light italic">Desk</span>
             </h1>
             <p className="text-slate-500 text-xl md:text-2xl mb-12 max-w-2xl mx-auto leading-relaxed font-medium">
               The high-performance infrastructure for world-class support teams.
@@ -73,7 +73,7 @@ export default function LandingPage() {
           <span className="hover:text-slate-900 transition-colors cursor-pointer">Api Docs</span>
         </div>
         <div className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em]">
-          © 2026 ZENITH SYSTEMS
+          © 2026 TECHLYSE SYSTEMS
         </div>
       </footer>
     </div>

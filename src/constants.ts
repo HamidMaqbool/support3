@@ -12,7 +12,7 @@ export const MOCK_USERS: User[] = [
   {
     id: 'a1',
     name: 'Sarah Smith',
-    email: 'sarah.support@zenith.com',
+    email: 'sarah.support@techlyse.com',
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah',
     role: 'admin',
   },
@@ -35,7 +35,7 @@ export const MOCK_TICKETS: Ticket[] = [
     id: 'T-1002',
     userId: 'u1',
     subject: 'Request for custom API integration',
-    description: 'We are looking to integrate Zenith with our internal CRM via webhooks.',
+    description: 'We are looking to integrate TechlyseDesk with our internal CRM via webhooks.',
     status: 'pending',
     priority: 'medium',
     category: 'Feature Request',

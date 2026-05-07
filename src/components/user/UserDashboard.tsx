@@ -321,7 +321,7 @@ export default function UserDashboard() {
              <div className="bg-primary/10 p-1.5 rounded-lg">
                 <LifeBuoy className="w-5 h-5 text-primary" />
              </div>
-             <span className="font-bold tracking-tight text-slate-900">Zenith<span className="font-light text-slate-500">Desk</span></span>
+             <span className="font-bold tracking-tight text-slate-900">Techlyse<span className="font-light text-slate-500">Desk</span></span>
           </div>
           <div className="h-4 w-[1px] bg-slate-200" />
           <span className="text-sm font-medium text-slate-600">Customer Support Area</span>

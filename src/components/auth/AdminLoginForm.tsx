@@ -7,7 +7,7 @@ import { useAuth } from '../../lib/AuthContext';
 import { toast } from 'sonner';
 
 export default function AdminLoginForm() {
-  const [email, setEmail] = useState('admin@zenith.com');
+  const [email, setEmail] = useState('admin@techlyse.com');
   const [password, setPassword] = useState('admin123');
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();

@@ -21,7 +21,7 @@ export default function LoginView() {
             <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
               Support Staff Login
             </h1>
-            <p className="text-slate-500 mt-2">ZenithDesk Professional Access</p>
+            <p className="text-slate-500 mt-2">TechlyseDesk Professional Access</p>
           </div>
 
           <AdminLoginForm />

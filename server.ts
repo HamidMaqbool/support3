@@ -316,11 +316,11 @@ async function initializeDatabase(db: mysql.Pool) {
     `);
 
     // Seed Demo Users
-    const [adminRows]: any = await db.query('SELECT * FROM users WHERE email = ?', ['admin@zenith.com']);
+    const [adminRows]: any = await db.query('SELECT * FROM users WHERE email = ?', ['admin@techlyse.com']);
     if (adminRows.length === 0) {
       const hashedPassword = await bcrypt.hash('admin123', 10);
       const [result]: any = await db.query('INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)', 
-        ['admin@zenith.com', hashedPassword, 'Support Admin', 'admin']);
+        ['admin@techlyse.com', hashedPassword, 'Support Admin', 'admin']);
       
       const adminId = result.insertId;
       await db.query('INSERT IGNORE INTO user_roles (userId, role) VALUES (?, ?), (?, ?)', 
@@ -328,33 +328,33 @@ async function initializeDatabase(db: mysql.Pool) {
       console.log('Admin user seeded into database with manager and technical roles.');
     }
 
-    const [techRows]: any = await db.query('SELECT * FROM users WHERE email = ?', ['tech@zenith.com']);
+    const [techRows]: any = await db.query('SELECT * FROM users WHERE email = ?', ['tech@techlyse.com']);
     if (techRows.length === 0) {
       const hashedPassword = await bcrypt.hash('tech123', 10);
       const [result]: any = await db.query('INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)', 
-        ['tech@zenith.com', hashedPassword, 'Tech Support', 'admin']);
+        ['tech@techlyse.com', hashedPassword, 'Tech Support', 'admin']);
       
       const userId = result.insertId;
       await db.query('INSERT IGNORE INTO user_roles (userId, role) VALUES (?, ?)', [userId, 'technical']);
       console.log('Tech Support user seeded.');
     }
 
-    const [billingRows]: any = await db.query('SELECT * FROM users WHERE email = ?', ['billing@zenith.com']);
+    const [billingRows]: any = await db.query('SELECT * FROM users WHERE email = ?', ['billing@techlyse.com']);
     if (billingRows.length === 0) {
       const hashedPassword = await bcrypt.hash('billing123', 10);
       const [result]: any = await db.query('INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)', 
-        ['billing@zenith.com', hashedPassword, 'Billing Agent', 'support']);
+        ['billing@techlyse.com', hashedPassword, 'Billing Agent', 'support']);
       
       const userId = result.insertId;
       await db.query('INSERT IGNORE INTO user_roles (userId, role) VALUES (?, ?)', [userId, 'billing']);
       console.log('Billing Support user seeded.');
     }
 
-    const [supportRows]: any = await db.query('SELECT * FROM users WHERE email = ?', ['support@zenith.com']);
+    const [supportRows]: any = await db.query('SELECT * FROM users WHERE email = ?', ['support@techlyse.com']);
     if (supportRows.length === 0) {
       const hashedPassword = await bcrypt.hash('support123', 10);
       const [result]: any = await db.query('INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)', 
-        ['support@zenith.com', hashedPassword, 'Support Specialist', 'support']);
+        ['support@techlyse.com', hashedPassword, 'Support Specialist', 'support']);
       console.log('Generic Support user seeded.');
     }
 
@@ -972,7 +972,7 @@ app.get('/api/tickets/:id/messages', authenticateJWT, async (req: any, res) => {
     }
 
     // Fallback for demo when DB is not configured
-    const isValid = (email === 'admin@zenith.com' && password === 'admin123' && role === 'admin');
+    const isValid = (email === 'admin@techlyse.com' && password === 'admin123' && role === 'admin');
 
     if (isValid) {
       const mockId = 999999;
