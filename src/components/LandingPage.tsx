@@ -13,20 +13,14 @@ export default function LandingPage() {
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5 }}
-        className="mb-12 flex flex-col items-center"
+        className="mb-10 flex flex-col items-center"
       >
-        <div className="flex items-center gap-3 mb-6">
+        <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-white shadow-lg shadow-slate-900/20">
             <LifeBuoy size={24} />
           </div>
           <span className="text-xl font-bold tracking-tight text-slate-900">ZenithDesk</span>
         </div>
-        <h1 className="text-5xl font-extrabold text-slate-900 tracking-tight text-center mb-4 leading-tight">
-          Professional Support <br /><span className="text-slate-400">Simplified.</span>
-        </h1>
-        <p className="text-slate-500 text-lg max-w-md text-center leading-relaxed">
-          The all-in-one mission control for modern support teams.
-        </p>
       </motion.div>
 
       <div className="flex justify-center w-full max-w-md relative group">
@@ -57,7 +51,7 @@ export default function LandingPage() {
             
             <AdminLoginForm />
 
-            <div className="mt-10 pt-8 border-t border-slate-50 text-center">
+            <div className="mt-6 pt-6 border-t border-slate-50 text-center">
               <p className="text-xs text-slate-400 leading-relaxed max-w-[240px] mx-auto">
                 Customer? Please use the secure login link provided in your welcome email.
               </p>

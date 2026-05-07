@@ -72,7 +72,7 @@ export default function AdminLoginForm() {
       <Button 
         type="submit" 
         disabled={isLoading}
-        className="w-full h-12 rounded-xl mt-4 text-white font-semibold text-base gap-2 bg-slate-900 hover:bg-slate-800 shadow-xl shadow-slate-900/10 cursor-pointer transition-all active:scale-[0.98]"
+        className="w-full h-12 rounded-xl mt-2 text-white font-semibold text-base gap-2 bg-slate-900 hover:bg-slate-800 shadow-xl shadow-slate-900/10 cursor-pointer transition-all active:scale-[0.98]"
       >
         {isLoading ? <Loader2 className="animate-spin" /> : <>Access Dashboard <LogIn size={18} /></>}
       </Button>
