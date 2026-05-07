@@ -1509,7 +1509,7 @@ export default function TicketDetailView({ portal }: Props) {
                                 <div className="px-2 py-1.5 text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50 mb-1">
                                    Select Agent
                                 </div>
-                                <DropdownMenuItem onClick={() => handleAssignTicket(user?.id)} className="rounded-lg text-xs gap-2 cursor-pointer focus:bg-primary/5 focus:text-primary">
+                                <DropdownMenuItem onClick={() => handleAssignTicket(Number(user?.id))} className="rounded-lg text-xs gap-2 cursor-pointer focus:bg-primary/5 focus:text-primary">
                                    <Avatar className="w-5 h-5">
                                       <AvatarImage src={user?.avatar} />
                                    </Avatar>

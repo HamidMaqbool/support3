@@ -27,14 +27,12 @@ export default function SecureLoginView() {
         if (res.ok) {
           const data = await res.json();
           
-          // Use localStorage directly to ensure it's there before we do anything else
-          localStorage.setItem('techlyse_token', data.token);
-          localStorage.setItem('techlyse_user', JSON.stringify(data.user));
+          // login() updates Zustand store and persists to techlyse_auth_storage
+          login(data.token, data.user);
           
           toast.success('Secure login successful');
           
           // Use a hard redirect for magic link login to ensure clean state across all components
-          // Doing this via window.location.replace avoids history clutter and ensures full app re-init
           const destination = data.user.role === 'admin' ? '/admin' : '/user';
           
           // Small delay ensures toast can be seen (briefly) and storage is settled

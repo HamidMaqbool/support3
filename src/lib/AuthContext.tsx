@@ -1,32 +1,8 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-
-interface User {
-  id: number | string;
-  email: string;
-  name: string;
-  role: 'user' | 'admin' | 'support';
-  roles?: string[];
-  avatar?: string;
-}
-
-interface AuthContextType {
-  user: User | null;
-  token: string | null;
-  login: (token: string, user: User) => void;
-  logout: () => void;
-  isAuthenticated: boolean;
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+import { ReactNode, useEffect } from 'react';
+import { useAuthStore } from '../store/useAuthStore';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(() => {
-    const savedUser = localStorage.getItem('techlyse_user');
-    return savedUser ? JSON.parse(savedUser) : null;
-  });
-  const [token, setToken] = useState<string | null>(() => {
-    return localStorage.getItem('techlyse_token');
-  });
+  const { token, login, logout, setUser } = useAuthStore();
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -38,7 +14,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (response.ok) {
             const data = await response.json();
             setUser(data);
-            localStorage.setItem('techlyse_user', JSON.stringify(data));
           } else if (response.status === 401 || response.status === 403) {
             logout();
           }
@@ -48,34 +23,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
     fetchProfile();
-  }, [token]);
-  const [isLoading, setIsLoading] = useState(false);
+  }, [token, setUser, logout]);
 
-  const login = (newToken: string, newUser: User) => {
-    setToken(newToken);
-    setUser(newUser);
-    localStorage.setItem('techlyse_token', newToken);
-    localStorage.setItem('techlyse_user', JSON.stringify(newUser));
-  };
-
-  const logout = () => {
-    setToken(null);
-    setUser(null);
-    localStorage.removeItem('techlyse_token');
-    localStorage.removeItem('techlyse_user');
-  };
-
-  return (
-    <AuthContext.Provider value={{ user, token, login, logout, isAuthenticated: !!token }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <>{children}</>;
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+  const store = useAuthStore();
+  return {
+    user: store.user,
+    token: store.token,
+    login: store.login,
+    logout: store.logout,
+    isAuthenticated: !!store.token
+  };
 }

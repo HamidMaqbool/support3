@@ -17,6 +17,8 @@ import { AuthProvider, useAuth } from './lib/AuthContext';
 function ProtectedRoute({ children, role }: { children: ReactNode, role?: 'user' | 'admin' | 'support' | 'staff' }) {
   const { isAuthenticated, user } = useAuth();
   
+  console.log("Auth Debug:", { isAuthenticated, user, requiredRole: role });
+
   if (!isAuthenticated) return <Navigate to={`/login?role=${role === 'staff' ? 'admin' : (role || 'user')}`} replace />;
   
   if (role === 'staff') {
