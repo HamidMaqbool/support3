@@ -14,13 +14,9 @@ export default function SecureLoginView() {
 
   useEffect(() => {
     if (hasAttempted.current) return;
+    hasAttempted.current = true;
     
     const performSecureLogin = async () => {
-      const storageKey = `sec_login_${token}`;
-      if (sessionStorage.getItem(storageKey)) return;
-      sessionStorage.setItem(storageKey, 'true');
-      hasAttempted.current = true;
-      
       try {
         const res = await fetch('/api/auth/login-secure', {
           method: 'POST',
@@ -31,12 +27,19 @@ export default function SecureLoginView() {
         if (res.ok) {
           const data = await res.json();
           
-          // login() automatically overwrites existing token/user in state and localStorage
+          // Use localStorage directly to ensure it's there before we do anything else
+          localStorage.setItem('zenith_token', data.token);
+          localStorage.setItem('zenith_user', JSON.stringify(data.user));
+          
+          // Also call login to update state for other components
           login(data.token, data.user);
+          
           toast.success('Secure login successful');
-          navigate(data.user.role === 'admin' ? '/admin' : '/user', { replace: true });
+          
+          // Use a hard redirect for magic link login to ensure clean state across all components
+          const destination = data.user.role === 'admin' ? '/admin' : '/user';
+          window.location.href = destination;
         } else {
-          sessionStorage.removeItem(storageKey);
           // @ts-ignore - catch block handles parsing
           toast.error('The secure link has expired or is invalid. Please go back to the main app and open support again to generate a new session.', { 
             duration: 8000,
@@ -45,7 +48,6 @@ export default function SecureLoginView() {
           navigate('/');
         }
       } catch (err) {
-        sessionStorage.removeItem(storageKey);
         console.error('Secure login error:', err);
         toast.error('Connection error');
         navigate('/');
