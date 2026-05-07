@@ -41,15 +41,27 @@ function ProtectedRoute({ children, role }: { children: ReactNode, role?: 'user'
 }
 
 export default function App() {
-  const { token, refreshProfile } = useAuthStore();
+  const { token, refreshProfile, logout } = useAuthStore();
 
   useEffect(() => {
+    // Purge legacy storage keys once to ensure clean transition to Zustand v1
+    const keysToPurge = ['techlyse_token', 'techlyse_user', 'techlyse_auth_storage'];
+    let purged = false;
+    keysToPurge.forEach(key => {
+      if (localStorage.getItem(key)) {
+        localStorage.removeItem(key);
+        purged = true;
+      }
+    });
+    if (purged) {
+      console.log('App: Cleared legacy session storage keys');
+    }
+
     // Initial profile check on app load
     if (token) {
       refreshProfile();
     }
-    // We only want this once on app init. Login/Logout handle their own state.
-  }, [refreshProfile]); // token is intentionally omitted to avoid loops or unnecessary refetches on login
+  }, [refreshProfile]); // token intentionally omitted to avoid loops
 
   return (
     <BrowserRouter>

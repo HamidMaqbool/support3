@@ -8,7 +8,7 @@ import { Loader2 } from 'lucide-react';
 export default function SecureLoginView() {
   const { token: urlToken } = useParams();
   const navigate = useNavigate();
-  const { login, token: authToken } = useAuthStore();
+  const { login, logout, token: authToken } = useAuthStore();
   const isAuthenticated = !!authToken;
 
   const hasAttempted = useRef(false);
@@ -28,6 +28,12 @@ export default function SecureLoginView() {
         if (res.ok) {
           const data = await res.json();
           
+          console.log('SecureLogin: Transitioning to', data.user.email);
+          
+          // CRITICAL: Explicitly logout any previous identity (like a logged-in admin) 
+          // before logging in the new user to ensure the store is completely clean.
+          logout();
+          
           // login() updates Zustand store and persists to techlyse_desk_auth_v1
           login(data.token, data.user);
           
@@ -35,8 +41,12 @@ export default function SecureLoginView() {
           
           const destination = data.user.role === 'admin' ? '/admin' : '/user';
           
-          // Use client-side navigation to ensure store state is correctly propagated and avoids race conditions with re-hydration.
-          navigate(destination, { replace: true });
+          // Use a hard redirect for magic link login to ensure full app re-init with new permissions.
+          // Small delay (100ms) ensures Zustand persistence finishes writing to localStorage.
+          setTimeout(() => {
+            console.log('SecureLogin: Reloading to', destination);
+            window.location.replace(destination);
+          }, 100);
         } else {
           // @ts-ignore - catch block handles parsing
           toast.error('The secure link has expired or is invalid. Please go back to the main app and open support again to generate a new session.', { 
