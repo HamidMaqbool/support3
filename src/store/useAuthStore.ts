@@ -13,9 +13,11 @@ export interface User {
 interface AuthState {
   user: User | null;
   token: string | null;
+  _hasHydrated: boolean;
   login: (token: string, user: User) => void;
   logout: () => void;
   setUser: (user: User) => void;
+  setHasHydrated: (state: boolean) => void;
   refreshProfile: () => Promise<void>;
 }
 
@@ -24,36 +26,50 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       user: null,
       token: null,
-      login: (token, user) => set({ 
-        token, 
-        user
-      }),
-      logout: () => set({ 
-        token: null, 
-        user: null
-      }),
+      _hasHydrated: false,
+      login: (token, user) => {
+        console.log('AuthStore: Logging in', { email: user.email, role: user.role });
+        set({ 
+          token, 
+          user
+        });
+      },
+      logout: () => {
+        console.log('AuthStore: Logging out');
+        set({ 
+          token: null, 
+          user: null
+        });
+      },
       setUser: (user) => set({ user }),
+      setHasHydrated: (state) => set({ _hasHydrated: state }),
       refreshProfile: async () => {
         const { token, logout, setUser } = get();
         if (!token) return;
         
+        console.log('AuthStore: Refreshing profile...');
         try {
           const response = await fetch('/api/me', {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           if (response.ok) {
             const data = await response.json();
+            console.log('AuthStore: Profile refreshed', { email: data.email });
             setUser(data);
           } else if (response.status === 401 || response.status === 403) {
+            console.warn('AuthStore: Profile refresh failed - unauthorized');
             logout();
           }
         } catch (err) {
-          console.error('Failed to refresh profile:', err);
+          console.error('AuthStore: Profile refresh error', err);
         }
       }
     }),
     {
-      name: 'techlyse_auth_storage',
+      name: 'techlyse_desk_auth_v1', // New key to ensure fresh start
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
       partialize: (state) => ({ 
         user: state.user, 
         token: state.token

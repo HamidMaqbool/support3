@@ -6,6 +6,7 @@
 import { useEffect, ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from '@/components/ui/sonner';
+import { Loader2 } from 'lucide-react';
 import UserDashboard from './components/user/UserDashboard';
 import AdminDashboard from './components/admin/AdminDashboard';
 import TicketDetailView from './components/shared/TicketDetailView';
@@ -15,8 +16,16 @@ import SecureLoginView from './components/SecureLoginView';
 import { useAuthStore } from './store/useAuthStore';
 
 function ProtectedRoute({ children, role }: { children: ReactNode, role?: 'user' | 'admin' | 'support' | 'staff' }) {
-  const { user, token } = useAuthStore();
+  const { user, token, _hasHydrated } = useAuthStore();
   const isAuthenticated = !!token;
+  
+  if (!_hasHydrated) {
+    return (
+      <div className="h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    );
+  }
   
   console.log("Auth Debug:", { isAuthenticated, user, requiredRole: role });
 
@@ -35,8 +44,12 @@ export default function App() {
   const { token, refreshProfile } = useAuthStore();
 
   useEffect(() => {
-    refreshProfile();
-  }, [token, refreshProfile]);
+    // Initial profile check on app load
+    if (token) {
+      refreshProfile();
+    }
+    // We only want this once on app init. Login/Logout handle their own state.
+  }, [refreshProfile]); // token is intentionally omitted to avoid loops or unnecessary refetches on login
 
   return (
     <BrowserRouter>

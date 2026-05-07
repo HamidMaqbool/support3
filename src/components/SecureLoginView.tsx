@@ -28,18 +28,15 @@ export default function SecureLoginView() {
         if (res.ok) {
           const data = await res.json();
           
-          // login() updates Zustand store and persists to techlyse_auth_storage
+          // login() updates Zustand store and persists to techlyse_desk_auth_v1
           login(data.token, data.user);
           
           toast.success('Secure login successful');
           
-          // Use a hard redirect for magic link login to ensure clean state across all components
           const destination = data.user.role === 'admin' ? '/admin' : '/user';
           
-          // Small delay ensures toast can be seen (briefly) and storage is settled
-          setTimeout(() => {
-            window.location.replace(destination);
-          }, 100);
+          // Use client-side navigation to ensure store state is correctly propagated and avoids race conditions with re-hydration.
+          navigate(destination, { replace: true });
         } else {
           // @ts-ignore - catch block handles parsing
           toast.error('The secure link has expired or is invalid. Please go back to the main app and open support again to generate a new session.', { 
