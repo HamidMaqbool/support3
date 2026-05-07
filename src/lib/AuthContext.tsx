@@ -4,7 +4,7 @@ interface User {
   id: number | string;
   email: string;
   name: string;
-  role: 'user' | 'admin';
+  role: 'user' | 'admin' | 'support';
   roles?: string[];
   avatar?: string;
 }

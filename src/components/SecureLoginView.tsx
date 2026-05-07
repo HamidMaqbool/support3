@@ -10,11 +10,16 @@ export default function SecureLoginView() {
   const navigate = useNavigate();
   const { login, logout, isAuthenticated, user: authUser } = useAuth();
 
+  const hasAttempted = useRef(false);
+
   useEffect(() => {
+    if (hasAttempted.current) return;
+    
     const performSecureLogin = async () => {
       const storageKey = `sec_login_${token}`;
       if (sessionStorage.getItem(storageKey)) return;
       sessionStorage.setItem(storageKey, 'true');
+      hasAttempted.current = true;
       
       try {
         const res = await fetch('/api/auth/login-secure', {
@@ -26,12 +31,10 @@ export default function SecureLoginView() {
         if (res.ok) {
           const data = await res.json();
           
-          // Force logout of existing user if any
-          logout();
-          
+          // login() automatically overwrites existing token/user in state and localStorage
           login(data.token, data.user);
           toast.success('Secure login successful');
-          navigate(data.user.role === 'admin' ? '/admin' : '/user');
+          navigate(data.user.role === 'admin' ? '/admin' : '/user', { replace: true });
         } else {
           sessionStorage.removeItem(storageKey);
           // @ts-ignore - catch block handles parsing
@@ -52,7 +55,7 @@ export default function SecureLoginView() {
     if (token) {
       performSecureLogin();
     }
-  }, [token, login, navigate, isAuthenticated, authUser]);
+  }, [token, login, navigate]);
 
   return (
     <div className="h-screen flex items-center justify-center bg-slate-50">
