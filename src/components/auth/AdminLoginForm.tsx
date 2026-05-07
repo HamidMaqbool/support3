@@ -41,27 +41,30 @@ export default function AdminLoginForm() {
   };
 
   return (
-    <form onSubmit={handleLogin} className="space-y-4 w-full">
-      <div className="space-y-1.5">
-        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Work Email</label>
+    <form onSubmit={handleLogin} className="space-y-5 w-full">
+      <div className="space-y-2">
+        <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider ml-1">Work Email</label>
         <Input 
           type="email" 
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="Enter work email"
-          className="h-12 rounded-xl bg-slate-50 border-slate-100 focus:bg-white focus:ring-2 focus:ring-primary/10 transition-all"
+          placeholder="name@company.com"
+          className="h-12 rounded-xl bg-slate-50/50 border-slate-200 focus:bg-white focus:ring-2 focus:ring-slate-900/5 transition-all placeholder:text-slate-300"
           required
         />
       </div>
       
-      <div className="space-y-1.5">
-        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Password</label>
+      <div className="space-y-2">
+        <div className="flex justify-between items-center px-1">
+          <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Password</label>
+          <button type="button" className="text-[11px] font-medium text-slate-400 hover:text-slate-600 transition-colors">Forgot?</button>
+        </div>
         <Input 
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="••••••••"
-          className="h-12 rounded-xl bg-slate-50 border-slate-100 focus:bg-white focus:ring-2 focus:ring-primary/10 transition-all"
+          className="h-12 rounded-xl bg-slate-50/50 border-slate-200 focus:bg-white focus:ring-2 focus:ring-slate-900/5 transition-all placeholder:text-slate-300"
           required
         />
       </div>
@@ -69,9 +72,9 @@ export default function AdminLoginForm() {
       <Button 
         type="submit" 
         disabled={isLoading}
-        className="w-full h-12 rounded-xl mt-6 text-white font-bold gap-2 bg-slate-900 hover:bg-slate-800 shadow-lg shadow-slate-900/10 cursor-pointer"
+        className="w-full h-12 rounded-xl mt-4 text-white font-semibold text-base gap-2 bg-slate-900 hover:bg-slate-800 shadow-xl shadow-slate-900/10 cursor-pointer transition-all active:scale-[0.98]"
       >
-        {isLoading ? <Loader2 className="animate-spin" /> : <>Sign In <LogIn size={18} /></>}
+        {isLoading ? <Loader2 className="animate-spin" /> : <>Access Dashboard <LogIn size={18} /></>}
       </Button>
     </form>
   );
