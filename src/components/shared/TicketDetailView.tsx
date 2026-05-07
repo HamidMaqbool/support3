@@ -1,5 +1,5 @@
 
-import { useState, useRef, useEffect, UIEvent, ChangeEvent, FormEvent } from 'react';
+import React, { useState, useRef, useEffect, UIEvent, ChangeEvent, FormEvent } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -24,7 +24,8 @@ import {
   Trash2,
   UserPlus,
   UserCheck,
-  ArrowRightLeft
+  ArrowRightLeft,
+  Plus
 } from 'lucide-react';
 import { MOCK_TICKETS, MOCK_MESSAGES, MOCK_USERS } from '../../constants';
 import { Message, Ticket } from '../../types';
@@ -84,10 +85,84 @@ export default function TicketDetailView({ portal }: Props) {
   const [showTags, setShowTags] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [ticketAttachments, setTicketAttachments] = useState<any[]>([]);
+  const [internalNotes, setInternalNotes] = useState('');
+  const [isUpdatingNotes, setIsUpdatingNotes] = useState(false);
   const [rating, setRating] = useState<number>(0);
+  const [internalUpdates, setInternalUpdates] = useState<any[]>([]);
+  const [newUpdateContent, setNewUpdateContent] = useState('');
+  const [newUpdateImage, setNewUpdateImage] = useState('');
+  const [isPostingUpdate, setIsPostingUpdate] = useState(false);
+  const updateImageInputRef = useRef<HTMLInputElement>(null);
+  const [activeSidebarTab, setActiveSidebarTab] = useState<'details' | 'attachments' | 'notes'>('details');
+
+  const fetchInternalUpdates = async () => {
+    try {
+      const res = await fetch(`/api/tickets/${id}/internal-updates`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setInternalUpdates(await res.json());
+      }
+    } catch (err) {}
+  };
+
+  const handlePostUpdate = async (type: string = 'note') => {
+    if (!newUpdateContent.trim() && !newUpdateImage) return;
+    setIsPostingUpdate(true);
+    try {
+      const res = await fetch(`/api/tickets/${id}/internal-updates`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify({ content: newUpdateContent, imageUrl: newUpdateImage, type })
+      });
+      if (res.ok) {
+        setNewUpdateContent('');
+        setNewUpdateImage('');
+        fetchInternalUpdates();
+        toast.success(`Staff update posted as ${type.replace('_', ' ')}`);
+      }
+    } catch (err) {
+      toast.error('Failed to post update');
+    } finally {
+      setIsPostingUpdate(false);
+    }
+  };
+
+  const handleUpdateImageUpload = async (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setUploading(true);
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setNewUpdateImage(data.url);
+          toast.success('Screenshot attached!');
+        }
+      } catch (err) {
+        toast.error('Upload failed');
+      } finally {
+        setUploading(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (activeSidebarTab === 'notes' && portal === 'admin') {
+      fetchInternalUpdates();
+    }
+  }, [activeSidebarTab]);
   const [feedback, setFeedback] = useState('');
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
-  const [activeSidebarTab, setActiveSidebarTab] = useState<'details' | 'attachments'>('details');
   const [isFocused, setIsFocused] = useState(true);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [showAttachmentsSidebar, setShowAttachmentsSidebar] = useState(true);
@@ -135,6 +210,7 @@ export default function TicketDetailView({ portal }: Props) {
         if (ticketRes.ok) {
           const ticketData = await ticketRes.json();
           setTicket(ticketData);
+          setInternalNotes(ticketData.internalNotes || '');
         }
 
         // Fetch Messages
@@ -423,6 +499,7 @@ export default function TicketDetailView({ portal }: Props) {
   const [admins, setAdmins] = useState<any[]>([]);
   const [isAssigning, setIsAssigning] = useState(false);
 
+  const isStaff = user?.role === 'admin' || user?.role === 'support';
   const isAdmin = user?.role === 'admin';
 
   useEffect(() => {
@@ -592,6 +669,29 @@ export default function TicketDetailView({ portal }: Props) {
     } finally {
       setIsDeleting(false);
       setIsDeleteDialogOpen(false);
+    }
+  };
+
+  const handleUpdateInternalNotes = async () => {
+    setIsUpdatingNotes(true);
+    try {
+      const res = await fetch(`/api/tickets/${id}`, {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify({ internalNotes })
+      });
+      if (res.ok) {
+        toast.success('Internal notes saved');
+      } else {
+        toast.error('Failed to save notes');
+      }
+    } catch (err) {
+      toast.error('Connection error');
+    } finally {
+      setIsUpdatingNotes(false);
     }
   };
 
@@ -804,7 +904,7 @@ export default function TicketDetailView({ portal }: Props) {
                 <ShieldAlert size={14} className="text-slate-400" /> Need Help?
              </Button>
 
-             {portal === 'admin' && (
+             {portal === 'admin' && isAdmin && (
                <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
                  <DialogTrigger render={<Button variant="ghost" size="icon" className="rounded-lg h-9 w-9 text-slate-400 hover:text-red-600 hover:bg-red-50" />}>
                    <Trash2 size={18} />
@@ -1305,6 +1405,14 @@ export default function TicketDetailView({ portal }: Props) {
           >
             Details
           </button>
+          {portal === 'admin' && (
+            <button 
+              onClick={() => setActiveSidebarTab('notes')}
+              className={`text-[10px] font-bold uppercase tracking-widest h-full border-b-2 transition-all px-2 ${activeSidebarTab === 'notes' ? 'border-primary text-primary' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+            >
+              Notes
+            </button>
+          )}
           <button 
             onClick={() => setActiveSidebarTab('attachments')}
             className={`text-[10px] font-bold uppercase tracking-widest h-full border-b-2 transition-all px-2 ${activeSidebarTab === 'attachments' ? 'border-primary text-primary' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
@@ -1356,6 +1464,12 @@ export default function TicketDetailView({ portal }: Props) {
                            <span className="text-xs text-slate-500 flex items-center gap-2"><Tag size={12} /> Category</span>
                            <span className="text-xs font-bold text-slate-700">{ticket.category}</span>
                         </div>
+                        {(ticket as any).appName && (
+                          <div className="flex items-center justify-between p-2 bg-primary/5 rounded-lg border border-primary/10">
+                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Source App</span>
+                             <span className="text-[10px] font-black text-primary uppercase tracking-tighter">{(ticket as any).appName}</span>
+                          </div>
+                        )}
                         <div className="flex items-center justify-between">
                            <span className="text-xs text-slate-500 flex items-center gap-2"><UserCheck size={12} /> Assignee</span>
                            <div className="text-right">
@@ -1381,7 +1495,7 @@ export default function TicketDetailView({ portal }: Props) {
                      </div>
                    </section>
     
-                   {portal === 'admin' && isAdmin && (
+                   {portal === 'admin' && isStaff && (
                      <section className="pt-6 border-t border-slate-100">
                         <h4 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-4">Internal Controls</h4>
                         <div className="grid grid-cols-2 gap-2">
@@ -1437,6 +1551,121 @@ export default function TicketDetailView({ portal }: Props) {
                    )}
                 </div>
               </>
+            ) : activeSidebarTab === 'notes' ? (
+              <section className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest">Internal Journal</h4>
+                  <Badge className="bg-amber-100 text-amber-700 border-none text-[8px] px-1 h-3.5 font-black uppercase tracking-tighter">Secure Array</Badge>
+                </div>
+                
+                {/* Timeline UI */}
+                <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                  {internalUpdates.length === 0 ? (
+                    <div className="text-center py-8">
+                       <p className="text-[10px] text-slate-400 font-bold uppercase italic">No entries in journal</p>
+                    </div>
+                  ) : (
+                    internalUpdates.map((update, idx) => (
+                      <div key={idx} className="relative pl-6 pb-4 border-l border-slate-100 last:border-0 last:pb-0">
+                         <div className="absolute left-[-5px] top-0 w-2.5 h-2.5 rounded-full bg-slate-200 border-2 border-white" />
+                         <div className="bg-slate-50/50 rounded-2xl p-3 border border-slate-100">
+                            <div className="flex items-center gap-2 mb-2">
+                               <Avatar className="w-5 h-5 rounded-md">
+                                  <AvatarImage src={update.staffAvatar} />
+                               </Avatar>
+                               <span className="text-[9px] font-black text-slate-900 group-hover:text-primary transition-colors">{update.staffName}</span>
+                               <span className="text-[9px] font-bold text-slate-300 uppercase tracking-widest ml-auto">{new Date(update.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            </div>
+                            <div className="flex items-start gap-2">
+                               <Badge className={`text-[7px] font-black uppercase px-1 h-3 shrink-0 ${
+                                 update.type === 'work_in_progress' ? 'bg-blue-100 text-blue-600' :
+                                 update.type === 'issue_fixed' ? 'bg-green-100 text-green-600' :
+                                 update.type === 'attachment' ? 'bg-purple-100 text-purple-600' :
+                                 'bg-slate-100 text-slate-500'
+                               }`}>
+                                 {update.type?.replace('_', ' ')}
+                               </Badge>
+                               <p className="text-[11px] text-slate-600 leading-normal font-medium">{update.content}</p>
+                            </div>
+                            {update.imageUrl && (
+                              <div className="mt-2 rounded-xl overflow-hidden border border-slate-200">
+                                 <img src={update.imageUrl} alt="Internal screenshot" className="w-full h-auto max-h-48 object-cover cursor-zoom-in hover:scale-105 transition-transform" />
+                              </div>
+                            )}
+                         </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Post New Update UI */}
+                <div className="bg-slate-50 rounded-[24px] p-4 border border-slate-100">
+                  <div className="mb-3 space-y-3">
+                    <Textarea 
+                      value={newUpdateContent}
+                      onChange={(e) => setNewUpdateContent(e.target.value)}
+                      placeholder="Enter operational findings..."
+                      className="min-h-[80px] bg-white border-0 shadow-sm rounded-xl text-xs leading-relaxed resize-none focus-visible:ring-1 focus-visible:ring-slate-200"
+                    />
+                    {newUpdateImage && (
+                      <div className="relative inline-block mt-2">
+                         <img src={newUpdateImage} alt="Preview" className="w-20 h-20 rounded-xl object-cover border-2 border-white shadow-sm" />
+                         <button onClick={() => setNewUpdateImage('')} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 shadow-lg">
+                            <X size={10} />
+                         </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 items-center justify-between">
+                    <div className="flex gap-2">
+                      <input type="file" ref={updateImageInputRef} className="hidden" accept="image/*" onChange={handleUpdateImageUpload} />
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => updateImageInputRef.current?.click()}
+                        className="h-7 text-[8px] font-black uppercase rounded-lg border-slate-200"
+                      >
+                        <Plus size={10} className="mr-1" /> Screenshot
+                      </Button>
+                    </div>
+                    
+                    <div className="flex gap-1">
+                      <Button 
+                        onClick={() => handlePostUpdate('work_in_progress')} 
+                        disabled={isPostingUpdate}
+                        className="h-7 text-[8px] font-black uppercase bg-slate-900 hover:bg-slate-800 rounded-lg"
+                      >
+                        WIP
+                      </Button>
+                      <Button 
+                        onClick={() => handlePostUpdate('issue_fixed')} 
+                        disabled={isPostingUpdate}
+                        className="h-7 text-[8px] font-black uppercase bg-green-600 hover:bg-green-700 rounded-lg shadow-lg shadow-green-500/10"
+                      >
+                        Fix Committed
+                      </Button>
+                      <Button 
+                        onClick={() => handlePostUpdate('note')} 
+                        disabled={isPostingUpdate}
+                        className="h-7 text-[8px] font-black uppercase bg-slate-400 hover:bg-slate-500 rounded-lg"
+                      >
+                         Log
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="py-4 px-5 bg-amber-50/50 border border-amber-100 rounded-2xl flex items-center gap-3">
+                   <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm text-amber-500">
+                      <ShieldAlert size={14} />
+                   </div>
+                   <div className="flex-1">
+                      <p className="text-[10px] font-bold text-slate-900 leading-tight">Private Infrastructure</p>
+                      <p className="text-[9px] text-slate-500">This content is managed on secure arrays and is never exposed to customer-facing portals.</p>
+                   </div>
+                </div>
+              </section>
             ) : (
               <section>
                 <h4 className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-4">Ticket Attachments</h4>
@@ -1453,7 +1682,12 @@ export default function TicketDetailView({ portal }: Props) {
                           <FileText size={16} className="text-slate-400 group-hover:text-primary" />
                        </div>
                        <div className="min-w-0 flex-1">
-                          <p className="text-[10px] font-bold text-slate-900 group-hover:text-primary truncate">{file.fileName}</p>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <p className="text-[10px] font-bold text-slate-900 group-hover:text-primary truncate">{file.fileName}</p>
+                            {file.isInternal ? (
+                              <Badge className="bg-amber-100 text-amber-700 border-none text-[8px] px-1 h-3.5 font-black uppercase shrink-0">Internal</Badge>
+                            ) : null}
+                          </div>
                           <p className="text-[9px] text-slate-400">{Number(file.fileSize / 1024 || 0).toFixed(1)} KB • {file.fileType?.split('/')?.[1]?.toUpperCase() || 'FILE'}</p>
                        </div>
                     </a>

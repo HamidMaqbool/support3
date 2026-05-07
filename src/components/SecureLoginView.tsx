@@ -8,14 +8,9 @@ import { Loader2 } from 'lucide-react';
 export default function SecureLoginView() {
   const { token } = useParams();
   const navigate = useNavigate();
-  const { login, isAuthenticated, user: authUser } = useAuth();
+  const { login, logout, isAuthenticated, user: authUser } = useAuth();
 
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate(authUser?.role === 'admin' ? '/admin' : '/user');
-      return;
-    }
-
     const performSecureLogin = async () => {
       const storageKey = `sec_login_${token}`;
       if (sessionStorage.getItem(storageKey)) return;
@@ -30,12 +25,20 @@ export default function SecureLoginView() {
 
         if (res.ok) {
           const data = await res.json();
+          
+          // Force logout of existing user if any
+          logout();
+          
           login(data.token, data.user);
           toast.success('Secure login successful');
           navigate(data.user.role === 'admin' ? '/admin' : '/user');
         } else {
           sessionStorage.removeItem(storageKey);
-          toast.error('Invalid or expired secure link');
+          // @ts-ignore - catch block handles parsing
+          toast.error('The secure link has expired or is invalid. Please go back to the main app and open support again to generate a new session.', { 
+            duration: 8000,
+            id: 'expired-token-error'
+          });
           navigate('/');
         }
       } catch (err) {

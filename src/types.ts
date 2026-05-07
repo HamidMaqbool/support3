@@ -9,6 +9,10 @@ export interface User {
   avatar?: string;
   role: 'user' | 'admin';
   roles?: string[];
+  phone?: string;
+  whatsapp?: string;
+  secondaryEmail?: string;
+  about?: string;
 }
 
 export interface Message {
@@ -33,6 +37,8 @@ export interface Ticket {
   category: string;
   isInternal?: boolean | number;
   assignedTo?: number | string;
+  assignedName?: string;
+  appName?: string;
   rating?: number;
   feedback?: string;
   createdAt: string;

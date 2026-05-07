@@ -27,6 +27,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(() => {
     return localStorage.getItem('zenith_token');
   });
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (token) {
+        try {
+          const response = await fetch('/api/me', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (response.ok) {
+            const data = await response.json();
+            setUser(data);
+            localStorage.setItem('zenith_user', JSON.stringify(data));
+          } else if (response.status === 401 || response.status === 403) {
+            logout();
+          }
+        } catch (err) {
+          console.error('Failed to fetch profile:', err);
+        }
+      }
+    };
+    fetchProfile();
+  }, [token]);
   const [isLoading, setIsLoading] = useState(false);
 
   const login = (newToken: string, newUser: User) => {

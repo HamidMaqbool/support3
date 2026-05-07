@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useRef, FormEvent } from 'react';
+import React, { useState, useEffect, useRef, FormEvent } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -56,10 +56,18 @@ export default function UserDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [admins, setAdmins] = useState<any[]>([]);
   const [newTicket, setNewTicket] = useState({ subject: '', category: 'Technical', message: '' });
-  const [profileData, setProfileData] = useState({ name: '', avatar: '' });
+  const [profileData, setProfileData] = useState({ 
+    name: '', 
+    avatar: '', 
+    phone: '', 
+    whatsapp: '', 
+    secondaryEmail: '', 
+    about: '' 
+  });
   const [attachments, setAttachments] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const socket = getSocket();
@@ -112,11 +120,40 @@ export default function UserDashboard() {
         setUserProfile(data);
         setProfileData({ 
           name: data.name || '', 
-          avatar: data.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.id}` 
+          avatar: data.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.id}`,
+          phone: data.phone || '',
+          whatsapp: data.whatsapp || '',
+          secondaryEmail: data.secondaryEmail || '',
+          about: data.about || ''
         });
       }
     } catch (err) {
       console.error('Fetch profile error:', err);
+    }
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setUploading(true);
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setProfileData(prev => ({ ...prev, avatar: data.url }));
+          toast.success('Avatar uploaded!');
+        }
+      } catch (err) {
+        toast.error('Failed to upload avatar');
+      } finally {
+        setUploading(false);
+      }
     }
   };
 
@@ -341,7 +378,7 @@ export default function UserDashboard() {
           
         {/* Profile Dialog */}
         <Dialog open={isProfileOpen} onOpenChange={setIsProfileOpen}>
-          <DialogContent className="sm:max-w-md bg-white border-0 shadow-2xl rounded-[32px]">
+          <DialogContent className="sm:max-w-xl bg-white border-0 shadow-2xl rounded-[32px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="text-2xl font-bold">Manage Profile</DialogTitle>
               <DialogDescription className="text-slate-500">
@@ -350,22 +387,37 @@ export default function UserDashboard() {
             </DialogHeader>
             <form onSubmit={handleUpdateProfile} className="space-y-6 py-4">
               <div className="flex flex-col items-center gap-4 mb-6">
-                <Avatar className="w-24 h-24 border-4 border-slate-50 shadow-xl">
-                  <AvatarImage src={profileData.avatar} />
-                  <AvatarFallback className="text-2xl bg-slate-100 font-bold">{profileData.name?.[0]}</AvatarFallback>
-                </Avatar>
-                <div className="space-y-1 text-center">
-                  <p className="text-xs font-bold uppercase text-slate-400">Profile Image URL</p>
+                <div className="relative group cursor-pointer" onClick={() => avatarInputRef.current?.click()}>
+                  <Avatar className="w-24 h-24 border-4 border-slate-50 shadow-xl group-hover:opacity-75 transition-opacity">
+                    <AvatarImage src={profileData.avatar} />
+                    <AvatarFallback className="text-2xl bg-slate-100 font-bold">{profileData.name?.[0] || 'U'}</AvatarFallback>
+                  </Avatar>
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="bg-slate-900/40 text-white p-2 rounded-full backdrop-blur-sm">
+                      <Plus size={20} />
+                    </div>
+                  </div>
+                  <input 
+                    type="file" 
+                    ref={avatarInputRef} 
+                    className="hidden" 
+                    accept="image/*"
+                    onChange={handleAvatarUpload}
+                  />
+                </div>
+                {uploading && <p className="text-[10px] font-bold text-primary animate-pulse uppercase">Uploading image...</p>}
+                <div className="space-y-1 text-center w-full max-w-xs">
+                  <p className="text-[10px] font-bold uppercase text-slate-400">Profile Image URL</p>
                   <Input 
                     value={profileData.avatar} 
                     onChange={(e) => setProfileData({...profileData, avatar: e.target.value})}
                     placeholder="https://example.com/image.jpg"
-                    className="h-10 text-xs rounded-xl bg-slate-50 border-0 text-center w-64"
+                    className="h-10 text-[10px] rounded-xl bg-slate-50 border-0 text-center"
                   />
                 </div>
               </div>
 
-              <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="text-xs font-bold uppercase tracking-wider text-slate-400">Full Name</Label>
                   <Input 
@@ -376,25 +428,64 @@ export default function UserDashboard() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-xs font-bold uppercase tracking-wider text-slate-400">Email Address (Read-only)</Label>
+                  <Label className="text-xs font-bold uppercase tracking-wider text-slate-400">Secondary Email</Label>
                   <Input 
-                    disabled
-                    className="h-12 rounded-xl bg-slate-50 border-0 text-slate-400 cursor-not-allowed"
-                    value={authUser?.email || ''}
+                    className="h-12 rounded-xl bg-slate-50 border-0 focus-visible:ring-2 focus-visible:ring-primary/20"
+                    value={profileData.secondaryEmail}
+                    onChange={(e) => setProfileData({...profileData, secondaryEmail: e.target.value})}
+                    placeholder="backup@example.com"
                   />
                 </div>
-                {userProfile?.appName && (
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Associated Application</p>
-                    <p className="text-sm font-bold text-slate-700">{userProfile.appName}</p>
-                  </div>
-                )}
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase tracking-wider text-slate-400">Phone Number</Label>
+                  <Input 
+                    className="h-12 rounded-xl bg-slate-50 border-0 focus-visible:ring-2 focus-visible:ring-primary/20"
+                    value={profileData.phone}
+                    onChange={(e) => setProfileData({...profileData, phone: e.target.value})}
+                    placeholder="+1 234 567 890"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-bold uppercase tracking-wider text-slate-400">WhatsApp</Label>
+                  <Input 
+                    className="h-12 rounded-xl bg-slate-50 border-0 focus-visible:ring-2 focus-visible:ring-primary/20"
+                    value={profileData.whatsapp}
+                    onChange={(e) => setProfileData({...profileData, whatsapp: e.target.value})}
+                    placeholder="+1 234 567 890"
+                  />
+                </div>
               </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-bold uppercase tracking-wider text-slate-400">About Me</Label>
+                <Textarea 
+                  className="rounded-xl bg-slate-50 border-0 focus-visible:ring-2 focus-visible:ring-primary/20 min-h-[100px]"
+                  value={profileData.about}
+                  onChange={(e) => setProfileData({...profileData, about: e.target.value})}
+                  placeholder="Tell us a bit about yourself..."
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-bold uppercase tracking-wider text-slate-400">Primary Email (Read-only)</Label>
+                <Input 
+                  disabled
+                  className="h-12 rounded-xl bg-slate-50 border-0 text-slate-400 cursor-not-allowed"
+                  value={authUser?.email || ''}
+                />
+              </div>
+
+              {userProfile?.appName && (
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Associated Application</p>
+                  <p className="text-sm font-bold text-slate-700">{userProfile.appName}</p>
+                </div>
+              )}
 
               <DialogFooter>
                 <Button type="button" variant="ghost" onClick={() => setIsProfileOpen(false)} className="rounded-xl h-12">Cancel</Button>
-                <Button type="submit" className="bg-slate-900 hover:bg-slate-800 text-white rounded-xl px-8 h-12">
-                  Save Changes
+                <Button type="submit" disabled={uploading} className="bg-slate-900 hover:bg-slate-800 text-white rounded-xl px-8 h-12">
+                  {uploading ? 'Uploading...' : 'Save Changes'}
                 </Button>
               </DialogFooter>
             </form>

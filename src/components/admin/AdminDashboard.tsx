@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useRef, FormEvent } from 'react';
+import React, { useState, useEffect, useRef, FormEvent } from 'react';
 import { motion } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -27,7 +27,8 @@ import {
   UserCheck,
   Plus,
   Send,
-  Paperclip
+  Paperclip,
+  LogOut
 } from 'lucide-react';
 import { getSocket } from '../../lib/socket';
 import { MOCK_USERS } from '../../constants';
@@ -70,11 +71,90 @@ export default function AdminDashboard() {
   const [newAppName, setNewAppName] = useState('');
   const [newTicket, setNewTicket] = useState({ subject: '', category: 'Technical', message: '' });
   const [isInternal, setIsInternal] = useState(true);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [profileData, setProfileData] = useState({ 
+    name: '', 
+    avatar: '', 
+    phone: '', 
+    whatsapp: '', 
+    secondaryEmail: '', 
+    about: '' 
+  });
   const [attachments, setAttachments] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   
-  const isManager = currentUser?.role === 'admin' && (currentUser as any)?.roles?.includes('manager');
+  const isAdmin = currentUser?.role === 'admin';
+  const isManager = isAdmin && (currentUser as any)?.roles?.includes('manager');
+
+  const fetchProfile = async () => {
+    try {
+      const res = await fetch('/api/me', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setProfileData({ 
+          name: data.name || '', 
+          avatar: data.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.id}`,
+          phone: data.phone || '',
+          whatsapp: data.whatsapp || '',
+          secondaryEmail: data.secondaryEmail || '',
+          about: data.about || ''
+        });
+      }
+    } catch (err) {
+      console.error('Fetch profile error:', err);
+    }
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setUploading(true);
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+          body: formData
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setProfileData(prev => ({ ...prev, avatar: data.url }));
+          toast.success('Avatar uploaded!');
+        }
+      } catch (err) {
+        toast.error('Failed to upload avatar');
+      } finally {
+        setUploading(false);
+      }
+    }
+  };
+
+  const handleUpdateProfile = async (e: FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/me', {
+        method: 'PATCH',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify(profileData)
+      });
+      if (res.ok) {
+        toast.success('Profile updated successfully');
+        setIsProfileOpen(false);
+        fetchProfile();
+      }
+    } catch (err) {
+      console.error('Update profile error:', err);
+      toast.error('Failed to update profile');
+    }
+  };
 
   const playSound = () => {
     const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3');
@@ -207,7 +287,7 @@ export default function AdminDashboard() {
       if (res.ok) {
         const data = await res.json();
         setUsers(data.users);
-        setAdmins(data.users.filter((u: any) => u.role === 'admin'));
+        setAdmins(data.users.filter((u: any) => u.role === 'admin' || u.role === 'support'));
         setUserPagination(data.pagination);
       }
     } catch (err) {
@@ -374,16 +454,18 @@ export default function AdminDashboard() {
     }
   };
 
-  const filteredTickets = tickets.filter(t => 
-    t.subject.toLowerCase().includes(adminSearch.toLowerCase()) || 
-    t.id.toString().toLowerCase().includes(adminSearch.toLowerCase())
-  );
+  const filteredTickets = tickets.filter(t => {
+    const matchesSearch = t.subject.toLowerCase().includes(adminSearch.toLowerCase()) || 
+                          t.id.toString().toLowerCase().includes(adminSearch.toLowerCase());
+    const hasAccess = isAdmin || t.assignedTo === currentUser?.id;
+    return matchesSearch && hasAccess;
+  });
 
   const stats = [
-    { label: 'Unassigned', value: tickets.filter(t => !t.assignedTo).length.toString().padStart(2, '0'), icon: Inbox },
-    { label: 'Critical', value: tickets.filter(t => t.priority === 'urgent').length.toString().padStart(2, '0'), icon: AlertCircle },
-    { label: 'Pending Response', value: tickets.filter(t => t.status === 'pending').length.toString().padStart(2, '0'), icon: Clock },
-    { label: 'Open Incidents', value: tickets.filter(t => t.status === 'open').length.toString().padStart(2, '0'), icon: MessageSquare }
+    { label: 'Unassigned', value: tickets.filter(t => (isAdmin || t.assignedTo === currentUser?.id) && !t.assignedTo).length.toString().padStart(2, '0'), icon: Inbox },
+    { label: 'Critical', value: tickets.filter(t => (isAdmin || t.assignedTo === currentUser?.id) && t.priority === 'urgent').length.toString().padStart(2, '0'), icon: AlertCircle },
+    { label: 'Pending Response', value: tickets.filter(t => (isAdmin || t.assignedTo === currentUser?.id) && t.status === 'pending').length.toString().padStart(2, '0'), icon: Clock },
+    { label: 'Open Incidents', value: tickets.filter(t => (isAdmin || t.assignedTo === currentUser?.id) && t.status === 'open').length.toString().padStart(2, '0'), icon: MessageSquare }
   ];
 
   return (
@@ -400,21 +482,20 @@ export default function AdminDashboard() {
                 <LifeBuoy className="w-5 h-5 text-white" />
              </div>
              {isSidebarOpen && (
-               <span className="font-bold text-lg text-white tracking-tight">ZENITH<span className="font-light text-slate-400">ADMIN</span></span>
+               <span className="font-bold text-lg text-white tracking-tight">ZENITH<span className="font-light text-slate-400">{currentUser?.role === 'admin' ? 'ADMIN' : 'SUPPORT'}</span></span>
              )}
           </div>
         </div>
 
         <div className="flex-1 py-6 px-3 flex flex-col gap-1 overflow-hidden whitespace-nowrap">
           {[
-            { id: 'inbox', label: 'Ticket Inbox', icon: Inbox },
-            { id: 'apps', label: 'External Apps', icon: ArrowUpRight },
-            { id: 'analytics', label: 'Support Metrics', icon: BarChart3 },
-            { id: 'staff', label: 'Support Team', icon: ShieldAlert },
-            { id: 'customers', label: 'Customers', icon: Users },
-            { id: 'feedback', label: 'Feedback & Ratings', icon: Star },
-            { id: 'settings', label: 'System Settings', icon: Settings },
-          ].map((item) => (
+            { id: 'inbox', label: 'Ticket Inbox', icon: Inbox, adminOnly: false },
+            { id: 'apps', label: 'External Apps', icon: ArrowUpRight, adminOnly: true },
+            { id: 'staff', label: 'Support Team', icon: ShieldAlert, adminOnly: true },
+            { id: 'customers', label: 'Customers', icon: Users, adminOnly: false },
+            { id: 'feedback', label: 'Feedback & Ratings', icon: Star, adminOnly: true },
+            { id: 'settings', label: 'System Settings', icon: Settings, adminOnly: true },
+          ].filter(item => !item.adminOnly || isAdmin).map((item) => (
             <button 
               key={item.id}
               onClick={() => setActiveTab(item.id)}
@@ -427,9 +508,15 @@ export default function AdminDashboard() {
         </div>
 
         <div className="p-4 border-t border-white/5 overflow-hidden whitespace-nowrap">
-           <div className={`flex items-center gap-4 p-2 rounded-xl bg-white/5 border border-white/5 group`}>
+           <div 
+             onClick={() => {
+               fetchProfile();
+               setIsProfileOpen(true);
+             }}
+             className={`flex items-center gap-4 p-2 rounded-xl bg-white/5 border border-white/5 group cursor-pointer hover:bg-white/10 transition-colors`}
+           >
               <Avatar className="w-8 h-8 rounded-lg">
-                <AvatarImage src="https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah" />
+                <AvatarImage src={currentUser?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser?.id}`} />
                 <AvatarFallback>AM</AvatarFallback>
               </Avatar>
               {isSidebarOpen && (
@@ -441,8 +528,14 @@ export default function AdminDashboard() {
                  </div>
               )}
               {isSidebarOpen && (
-                <button onClick={logout} className="opacity-0 group-hover:opacity-100 transition-opacity">
-                  <X size={14} className="text-slate-500 hover:text-red-400" />
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    logout();
+                  }} 
+                  className="opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <LogOut size={14} className="text-slate-500 hover:text-red-400" />
                 </button>
               )}
            </div>
@@ -622,17 +715,19 @@ export default function AdminDashboard() {
                                   >
                                      <ArrowUpRight size={18} />
                                   </div>
-                                  <Button 
-                                    variant="ghost" 
-                                    size="icon" 
-                                    className="w-10 h-10 rounded-xl text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setDeletingId(ticket.id);
-                                    }}
-                                  >
-                                     <Trash2 size={18} />
-                                  </Button>
+                                  {isAdmin && (
+                                    <Button 
+                                      variant="ghost" 
+                                      size="icon" 
+                                      className="w-10 h-10 rounded-xl text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setDeletingId(ticket.id);
+                                      }}
+                                    >
+                                       <Trash2 size={18} />
+                                    </Button>
+                                  )}
 
                                   <Dialog open={deletingId === ticket.id} onOpenChange={(open) => !open && setDeletingId(null)}>
                                     <DialogContent className="bg-white border-0 shadow-2xl rounded-[32px] sm:max-w-[400px] text-center p-8 overflow-hidden">
@@ -1126,6 +1221,93 @@ export default function AdminDashboard() {
                     }} className="rounded-xl">Cancel</Button>
                     <Button type="submit" disabled={uploading} className="bg-slate-900 hover:bg-slate-800 text-white rounded-xl px-6 gap-2">
                       {uploading ? <Loader2 size={16} className="animate-spin" /> : <>Create Ticket <Send size={16} /></>}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+            <Dialog open={isProfileOpen} onOpenChange={setIsProfileOpen}>
+              <DialogContent className="sm:max-w-xl bg-white border-0 shadow-2xl rounded-[32px] max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle className="text-2xl font-bold">Agent Profile</DialogTitle>
+                  <DialogDescription className="text-slate-500">
+                    Manage your identity and professional information.
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleUpdateProfile} className="space-y-6 py-4">
+                  <div className="flex flex-col items-center gap-4 mb-6">
+                    <div className="relative group cursor-pointer" onClick={() => avatarInputRef.current?.click()}>
+                      <Avatar className="w-24 h-24 border-4 border-slate-50 shadow-xl group-hover:opacity-75 transition-opacity">
+                        <AvatarImage src={profileData.avatar} />
+                        <AvatarFallback className="text-2xl bg-slate-100 font-bold">{profileData.name?.[0] || 'A'}</AvatarFallback>
+                      </Avatar>
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="bg-slate-900/40 text-white p-2 rounded-full backdrop-blur-sm">
+                          <Plus size={20} />
+                        </div>
+                      </div>
+                      <input 
+                        type="file" 
+                        ref={avatarInputRef} 
+                        className="hidden" 
+                        accept="image/*"
+                        onChange={handleAvatarUpload}
+                      />
+                    </div>
+                    {uploading && <p className="text-[10px] font-bold text-primary animate-pulse uppercase tracking-widest">Processing Image...</p>}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold uppercase tracking-wider text-slate-400">Full Name</Label>
+                      <Input 
+                        required 
+                        className="h-12 rounded-xl bg-slate-50 border-0 focus-visible:ring-2 focus-visible:ring-primary/20"
+                        value={profileData.name}
+                        onChange={(e) => setProfileData({...profileData, name: e.target.value})}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold uppercase tracking-wider text-slate-400">Secondary Email</Label>
+                      <Input 
+                        className="h-12 rounded-xl bg-slate-50 border-0 focus-visible:ring-2 focus-visible:ring-primary/20"
+                        value={profileData.secondaryEmail}
+                        onChange={(e) => setProfileData({...profileData, secondaryEmail: e.target.value})}
+                        placeholder="personal@email.com"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold uppercase tracking-wider text-slate-400">Phone</Label>
+                      <Input 
+                        className="h-12 rounded-xl bg-slate-50 border-0 focus-visible:ring-2 focus-visible:ring-primary/20"
+                        value={profileData.phone}
+                        onChange={(e) => setProfileData({...profileData, phone: e.target.value})}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-bold uppercase tracking-wider text-slate-400">WhatsApp</Label>
+                      <Input 
+                        className="h-12 rounded-xl bg-slate-50 border-0 focus-visible:ring-2 focus-visible:ring-primary/20"
+                        value={profileData.whatsapp}
+                        onChange={(e) => setProfileData({...profileData, whatsapp: e.target.value})}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-slate-400">Professional Bio</Label>
+                    <Textarea 
+                      className="rounded-xl bg-slate-50 border-0 focus-visible:ring-2 focus-visible:ring-primary/20 min-h-[100px]"
+                      value={profileData.about}
+                      onChange={(e) => setProfileData({...profileData, about: e.target.value})}
+                      placeholder="Support specializations, experience, etc."
+                    />
+                  </div>
+
+                  <DialogFooter>
+                    <Button type="button" variant="ghost" onClick={() => setIsProfileOpen(false)} className="rounded-xl h-12">Cancel</Button>
+                    <Button type="submit" disabled={uploading} className="bg-slate-900 hover:bg-slate-800 text-white rounded-xl px-8 h-12">
+                      {uploading ? 'Updating...' : 'Save Profile'}
                     </Button>
                   </DialogFooter>
                 </form>

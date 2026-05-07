@@ -107,7 +107,7 @@ async function initializeDatabase(db: mysql.Pool) {
         email VARCHAR(255) UNIQUE NOT NULL,
         password VARCHAR(255),
         name VARCHAR(255) NOT NULL,
-        role ENUM('user', 'admin') NOT NULL,
+        role ENUM('user', 'admin', 'support') NOT NULL,
         appId INT,
         avatar TEXT
       )
@@ -131,9 +131,27 @@ async function initializeDatabase(db: mysql.Pool) {
         console.log('Adding appId column to users table...');
         await db.query('ALTER TABLE users ADD COLUMN appId INT');
       }
+      
+      const roleCol = cols.find((c: any) => c.Field.toLowerCase() === 'role');
+      if (roleCol && !roleCol.Type.includes("'support'")) {
+        console.log('Updating role enum to include support...');
+        await db.query("ALTER TABLE users MODIFY COLUMN role ENUM('user', 'admin', 'support') NOT NULL");
+      }
       if (!colNames.includes('avatar')) {
         console.log('Adding avatar column to users table...');
         await db.query('ALTER TABLE users ADD COLUMN avatar TEXT');
+      }
+      if (!colNames.includes('phone')) {
+        await db.query('ALTER TABLE users ADD COLUMN phone VARCHAR(20)');
+      }
+      if (!colNames.includes('whatsapp')) {
+        await db.query('ALTER TABLE users ADD COLUMN whatsapp VARCHAR(20)');
+      }
+      if (!colNames.includes('secondaryemail')) {
+        await db.query('ALTER TABLE users ADD COLUMN secondaryEmail VARCHAR(255)');
+      }
+      if (!colNames.includes('about')) {
+        await db.query('ALTER TABLE users ADD COLUMN about TEXT');
       }
       // Make password nullable for external users if it isn't already
       const passwordCol = cols.find((c: any) => c.Field.toLowerCase() === 'password');
@@ -197,6 +215,10 @@ async function initializeDatabase(db: mysql.Pool) {
       if (!colNames.includes('isinternal')) {
         console.log('Adding isInternal column to tickets table...');
         await db.query('ALTER TABLE tickets ADD COLUMN isInternal BOOLEAN DEFAULT FALSE');
+      }
+      if (!colNames.includes('internalnotes')) {
+        console.log('Adding internalNotes column to tickets table...');
+        await db.query('ALTER TABLE tickets ADD COLUMN internalNotes TEXT');
       }
     } catch (err) {
       console.error('Error adding columns to tickets:', err);
@@ -270,6 +292,19 @@ async function initializeDatabase(db: mysql.Pool) {
       )
     `);
 
+    // Create Internal Updates Table (Private Notes with History)
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS internal_updates (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        ticketId INT NOT NULL,
+        staffId INT NOT NULL,
+        content TEXT,
+        imageUrl TEXT,
+        type VARCHAR(50) DEFAULT 'note', -- 'note', 'work_in_progress', 'issue_fixed', 'attachment'
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
     // Create Secure Links Table
     await db.query(`
       CREATE TABLE IF NOT EXISTS secure_links (
@@ -308,11 +343,19 @@ async function initializeDatabase(db: mysql.Pool) {
     if (billingRows.length === 0) {
       const hashedPassword = await bcrypt.hash('billing123', 10);
       const [result]: any = await db.query('INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)', 
-        ['billing@zenith.com', hashedPassword, 'Billing Agent', 'admin']);
+        ['billing@zenith.com', hashedPassword, 'Billing Agent', 'support']);
       
       const userId = result.insertId;
       await db.query('INSERT IGNORE INTO user_roles (userId, role) VALUES (?, ?)', [userId, 'billing']);
       console.log('Billing Support user seeded.');
+    }
+
+    const [supportRows]: any = await db.query('SELECT * FROM users WHERE email = ?', ['support@zenith.com']);
+    if (supportRows.length === 0) {
+      const hashedPassword = await bcrypt.hash('support123', 10);
+      const [result]: any = await db.query('INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)', 
+        ['support@zenith.com', hashedPassword, 'Support Specialist', 'support']);
+      console.log('Generic Support user seeded.');
     }
 
     const [userRows]: any = await db.query('SELECT * FROM users WHERE email = ?', ['user@example.com']);
@@ -380,7 +423,7 @@ app.get('/api/tickets/:id/attachments', authenticateJWT, async (req: any, res) =
   if (db) {
     try {
       let query = 'SELECT * FROM attachments WHERE ticketId = ?';
-      if (req.user.role !== 'admin') {
+      if (req.user.role !== 'admin' && req.user.role !== 'support') {
         query += ' AND isInternal = FALSE';
       }
       const [rows] = await db.query(query, [id]);
@@ -408,7 +451,7 @@ app.get('/api/tags', authenticateJWT, async (req: any, res) => {
 });
 
 app.post('/api/tickets/:id/tags', authenticateJWT, async (req: any, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin access required' });
+  if (req.user.role !== 'admin' && req.user.role !== 'support') return res.status(403).json({ message: 'Staff access required' });
   const { id } = req.params;
   const { tagName, color } = req.body;
   
@@ -597,20 +640,35 @@ app.post('/api/auth/login-secure', async (req, res) => {
         SELECT u.*, sl.expiresAt, sl.used 
         FROM users u
         JOIN secure_links sl ON u.id = sl.userId
-        WHERE sl.token = ? AND sl.expiresAt > ? AND sl.used = FALSE
-      `, [token, new Date()]);
+        WHERE sl.token = ?
+      `, [token]);
       
-      if (rows.length > 0) {
-        const user = rows[0];
-        await db.query('UPDATE secure_links SET used = TRUE WHERE token = ?', [token]);
-        const jwtToken = jwt.sign({ email: user.email, role: user.role, id: user.id }, JWT_SECRET, { expiresIn: '24h' });
-        return res.json({ token: jwtToken, user: { email: user.email, role: user.role, id: user.id, name: user.name, avatar: user.avatar } });
+      if (rows.length === 0) {
+        return res.status(404).json({ message: 'This secure link is invalid. Please request a new one from your application.' });
       }
+
+      const link = rows[0];
+      if (link.used) {
+        return res.status(401).json({ message: 'This secure link has already been used. Please return to your app and open support again.' });
+      }
+      if (new Date(link.expiresAt) < new Date()) {
+        return res.status(401).json({ message: 'This secure link has expired. Please return to your app and open support again for a fresh session.' });
+      }
+
+      const user = rows[0];
+      await db.query('UPDATE secure_links SET used = TRUE WHERE token = ?', [token]);
+      
+      // Fetch roles
+      const [roles]: any = await db.query('SELECT role FROM user_roles WHERE userId = ?', [user.id]);
+      const rolesList = roles.map((r: any) => r.role);
+
+      const jwtToken = jwt.sign({ email: user.email, role: user.role, id: user.id }, JWT_SECRET, { expiresIn: '24h' });
+      return res.json({ token: jwtToken, user: { ...user, roles: rolesList } });
     } catch (err) {
       console.error('Database secure login error:', err);
     }
   }
-  res.status(401).json({ message: 'Invalid or expired secure link' });
+  res.status(500).json({ message: 'System error during login' });
 });
 
 // User Management API
@@ -662,12 +720,18 @@ app.get('/api/me', authenticateJWT, async (req: any, res) => {
   if (db) {
     try {
       const [rows]: any = await db.query(`
-        SELECT u.id, u.email, u.name, u.role, u.avatar, a.name as appName 
+        SELECT u.id, u.email, u.name, u.role, u.avatar, u.phone, u.whatsapp, u.secondaryEmail, u.about, a.name as appName 
         FROM users u 
         LEFT JOIN apps a ON u.appId = a.id 
         WHERE u.id = ?
       `, [req.user.id]);
-      if (rows.length > 0) return res.json(rows[0]);
+      
+      if (rows.length > 0) {
+        // Fetch roles
+        const [roles]: any = await db.query('SELECT role FROM user_roles WHERE userId = ?', [req.user.id]);
+        const user = { ...rows[0], roles: roles.map((r: any) => r.role) };
+        return res.json(user);
+      }
     } catch (err) {
       console.error('Fetch profile error:', err);
     }
@@ -676,11 +740,15 @@ app.get('/api/me', authenticateJWT, async (req: any, res) => {
 });
 
 app.patch('/api/me', authenticateJWT, async (req: any, res) => {
-  const { name, avatar } = req.body;
+  const { name, avatar, phone, whatsapp, secondaryEmail, about } = req.body;
   const db = await getDb();
   if (db) {
     try {
-      await db.query('UPDATE users SET name = ?, avatar = ? WHERE id = ?', [name, avatar, req.user.id]);
+      await db.query(`
+        UPDATE users 
+        SET name = ?, avatar = ?, phone = ?, whatsapp = ?, secondaryEmail = ?, about = ? 
+        WHERE id = ?
+      `, [name, avatar, phone, whatsapp, secondaryEmail, about, req.user.id]);
       return res.json({ success: true });
     } catch (err) {
       console.error('Update profile error:', err);
@@ -744,6 +812,11 @@ app.get('/api/tickets', authenticateJWT, async (req: any, res) => {
   const db = await getDb();
   if (db) {
     try {
+      // First, get user's roles to check for 'manager' (superadmin)
+      const [userRoles]: any = await db.query('SELECT role FROM user_roles WHERE userId = ?', [req.user.id]);
+      const rolesList = userRoles.map((r: any) => r.role);
+      const isSuperAdmin = rolesList.includes('manager');
+
       let query = `
         SELECT t.*, a.name as appName, u.name as assignedName, 
                (SELECT GROUP_CONCAT(role SEPARATOR ' / ') FROM user_roles WHERE userId = t.assignedTo) as assignedRole
@@ -752,10 +825,19 @@ app.get('/api/tickets', authenticateJWT, async (req: any, res) => {
         LEFT JOIN users u ON t.assignedTo = u.id
       `;
       let params: any[] = [];
+      let whereClauses: string[] = [];
       
       if (req.user.role === 'user') {
-        query += ' WHERE t.userId = ?';
+        whereClauses.push('t.userId = ?');
         params.push(req.user.id);
+      } else if (req.user.role === 'admin' && !isSuperAdmin) {
+        // Regular support staff only see assigned tickets
+        whereClauses.push('t.assignedTo = ?');
+        params.push(req.user.id);
+      }
+      
+      if (whereClauses.length > 0) {
+        query += ' WHERE ' + whereClauses.join(' AND ');
       }
       
       query += ' ORDER BY t.createdAt DESC';
@@ -767,7 +849,7 @@ app.get('/api/tickets', authenticateJWT, async (req: any, res) => {
     }
   }
   
-  res.json([]); // Fallback to empty list or mock data could be handled here
+  res.json([]);
 });
 
 // Get Ticket Detail API
@@ -789,6 +871,14 @@ app.get('/api/tickets/:id', authenticateJWT, async (req: any, res) => {
       const ticket = rows[0];
       if (req.user.role === 'user' && ticket.userId !== req.user.id) {
         return res.status(403).json({ message: 'You do not have permission to view this ticket' });
+      }
+      if (req.user.role === 'support' && ticket.assignedTo !== req.user.id) {
+        return res.status(403).json({ message: 'You do not have permission to view this ticket (unassigned)' });
+      }
+
+      // Protect internal notes
+      if (req.user.role !== 'admin' && req.user.role !== 'support') {
+        delete ticket.internalNotes;
       }
       
       return res.json(ticket);
@@ -817,7 +907,7 @@ app.get('/api/tickets/:id/messages', authenticateJWT, async (req: any, res) => {
       const params: any[] = [id];
 
       // Only staff can see internal messages
-      if (req.user.role !== 'admin') {
+      if (req.user.role !== 'admin' && req.user.role !== 'support') {
         query += ' AND m.isInternal = FALSE';
       }
 
@@ -901,8 +991,8 @@ app.get('/api/admin/canned-responses', authenticateJWT, (req, res) => {
 
 // Assign Ticket API
 app.patch('/api/tickets/:id/assign', authenticateJWT, async (req: any, res) => {
-  const isAdmin = req.user.role === 'admin';
-  if (!isAdmin) return res.status(403).json({ message: 'Only team members can assign tickets' });
+  const isStaff = req.user.role === 'admin' || req.user.role === 'support';
+  if (!isStaff) return res.status(403).json({ message: 'Only team members can assign tickets' });
   
   const { id } = req.params;
   const { assignedTo } = req.body;
@@ -947,7 +1037,7 @@ app.patch('/api/tickets/:id/assign', authenticateJWT, async (req: any, res) => {
 
 // Update Ticket Status API
 app.patch('/api/tickets/:id/status', authenticateJWT, async (req: any, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin access required' });
+  if (req.user.role !== 'admin' && req.user.role !== 'support') return res.status(403).json({ message: 'Staff access required' });
   
   const { id } = req.params;
   const { status } = req.body;
@@ -1006,11 +1096,11 @@ app.patch('/api/tickets/:id/reopen', authenticateJWT, async (req: any, res) => {
       if (ticketRows.length === 0) return res.status(404).json({ message: 'Ticket not found' });
       
       const ticket = ticketRows[0];
-      if (ticket.userId !== userId && req.user.role !== 'admin') {
+      if (ticket.userId !== userId && req.user.role !== 'admin' && req.user.role !== 'support') {
         return res.status(403).json({ message: 'Access denied' });
       }
 
-      if (req.user.role !== 'admin' && (ticket.status !== 'resolved' || ticket.rating !== null)) {
+      if (req.user.role !== 'admin' && req.user.role !== 'support' && (ticket.status !== 'resolved' || ticket.rating !== null)) {
         return res.status(400).json({ message: 'Cannot reopen ticket after feedback or if not resolved' });
       }
 
@@ -1023,6 +1113,100 @@ app.patch('/api/tickets/:id/reopen', authenticateJWT, async (req: any, res) => {
     }
   }
   res.json({ message: 'Ticket reopened (demo mode)' });
+});
+
+app.get('/api/tickets/:id/internal-updates', authenticateJWT, async (req: any, res) => {
+  const { id } = req.params;
+  const db = await getDb();
+  if (db) {
+    try {
+      // Security: Only admin or assigned support can see internal updates
+      const [tickets]: any = await db.query('SELECT assignedTo FROM tickets WHERE id = ?', [id]);
+      if (tickets.length === 0) return res.status(404).json({ message: 'Ticket not found' });
+      
+      const isAdmin = req.user.role === 'admin';
+      const isSupport = req.user.role === 'support';
+      const isAssigned = tickets[0].assignedTo === req.user.id;
+
+      if (!isAdmin && !(isSupport && isAssigned)) {
+        return res.status(403).json({ message: 'Staff access required for assigned tickets' });
+      }
+
+      const [rows] = await db.query(`
+        SELECT iu.*, u.name as staffName, u.avatar as staffAvatar
+        FROM internal_updates iu
+        JOIN users u ON iu.staffId = u.id
+        WHERE iu.ticketId = ?
+        ORDER BY iu.createdAt ASC
+      `, [id]);
+      return res.json(rows);
+    } catch (err) {
+      console.error('Fetch internal updates error:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+  res.status(500).json({ message: 'Database disconnected' });
+});
+
+app.post('/api/tickets/:id/internal-updates', authenticateJWT, async (req: any, res) => {
+  const { id } = req.params;
+  const { content, imageUrl, type } = req.body;
+  
+  const db = await getDb();
+  if (db) {
+    try {
+      // Security: Only admin or assigned support can post internal updates
+      const [tickets]: any = await db.query('SELECT assignedTo FROM tickets WHERE id = ?', [id]);
+      if (tickets.length === 0) return res.status(404).json({ message: 'Ticket not found' });
+      
+      const isAdmin = req.user.role === 'admin';
+      const isSupport = req.user.role === 'support';
+      const isAssigned = tickets[0].assignedTo === req.user.id;
+
+      if (!isAdmin && !(isSupport && isAssigned)) {
+        return res.status(403).json({ message: 'Staff access required for assigned tickets' });
+      }
+
+      await db.query(`
+        INSERT INTO internal_updates (ticketId, staffId, content, imageUrl, type)
+        VALUES (?, ?, ?, ?, ?)
+      `, [id, req.user.id, content, imageUrl, type || 'note']);
+      return res.json({ success: true });
+    } catch (err) {
+      console.error('Create internal update error:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+  res.status(500).json({ message: 'Database disconnected' });
+});
+
+app.patch('/api/tickets/:id', authenticateJWT, async (req: any, res) => {
+  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin access required' });
+  const { id } = req.params;
+  const { internalNotes, priority, category } = req.body;
+  
+  const db = await getDb();
+  if (db) {
+    try {
+      const sets = [];
+      const params = [];
+      
+      if (internalNotes !== undefined) { sets.push('internalNotes = ?'); params.push(internalNotes); }
+      if (priority !== undefined) { sets.push('priority = ?'); params.push(priority); }
+      if (category !== undefined) { sets.push('category = ?'); params.push(category); }
+      
+      if (sets.length === 0) return res.json({ message: 'No changes provided' });
+      
+      params.push(id);
+      await db.query(`UPDATE tickets SET ${sets.join(', ')} WHERE id = ?`, params);
+      
+      return res.json({ success: true });
+    } catch (err) {
+      console.error('Database ticket update error:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+  res.status(500).json({ message: 'Database disconnected' });
 });
 
 // Delete Ticket API (with file cleanup)
