@@ -85,8 +85,8 @@ export default function AdminDashboard() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   
-  const isAdmin = currentUser?.role === 'admin';
-  const isManager = isAdmin && (currentUser as any)?.roles?.includes('manager');
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super-admin';
+  const isManager = currentUser?.role === 'super-admin' || (isAdmin && (currentUser as any)?.roles?.includes('manager'));
 
   const fetchProfile = async () => {
     try {
@@ -287,7 +287,7 @@ export default function AdminDashboard() {
       if (res.ok) {
         const data = await res.json();
         setUsers(data.users);
-        setAdmins(data.users.filter((u: any) => u.role === 'admin' || u.role === 'support'));
+        setAdmins(data.users.filter((u: any) => u.role === 'admin' || u.role === 'support' || u.role === 'super-admin'));
         setUserPagination(data.pagination);
       }
     } catch (err) {
@@ -482,7 +482,7 @@ export default function AdminDashboard() {
                 <LifeBuoy className="w-5 h-5 text-white" />
              </div>
              {isSidebarOpen && (
-               <span className="font-bold text-lg text-white tracking-tight">TECHLYSE<span className="font-light text-slate-400">{currentUser?.role === 'admin' ? 'ADMIN' : 'SUPPORT'}</span></span>
+               <span className="font-bold text-lg text-white tracking-tight">TECHLYSE<span className="font-light text-slate-400">{isAdmin ? 'ADMIN' : 'SUPPORT'}</span></span>
              )}
           </div>
         </div>

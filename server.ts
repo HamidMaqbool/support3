@@ -107,7 +107,7 @@ async function initializeDatabase(db: mysql.Pool) {
         email VARCHAR(255) UNIQUE NOT NULL,
         password VARCHAR(255),
         name VARCHAR(255) NOT NULL,
-        role ENUM('user', 'admin', 'support') NOT NULL,
+        role ENUM('user', 'admin', 'support', 'super-admin') NOT NULL,
         appId INT,
         avatar TEXT
       )
@@ -133,9 +133,9 @@ async function initializeDatabase(db: mysql.Pool) {
       }
       
       const roleCol = cols.find((c: any) => c.Field.toLowerCase() === 'role');
-      if (roleCol && !roleCol.Type.includes("'support'")) {
-        console.log('Updating role enum to include support...');
-        await db.query("ALTER TABLE users MODIFY COLUMN role ENUM('user', 'admin', 'support') NOT NULL");
+      if (roleCol && !roleCol.Type.includes("'super-admin'")) {
+        console.log('Updating role enum to include super-admin...');
+        await db.query("ALTER TABLE users MODIFY COLUMN role ENUM('user', 'admin', 'support', 'super-admin') NOT NULL");
       }
       if (!colNames.includes('avatar')) {
         console.log('Adding avatar column to users table...');
@@ -365,6 +365,14 @@ async function initializeDatabase(db: mysql.Pool) {
         ['user@example.com', hashedPassword, 'Demo User', 'user']);
       console.log('Demo user seeded into database.');
     }
+
+    const [superAdminRows]: any = await db.query('SELECT * FROM users WHERE email = ?', ['superadmin@techlyse.com']);
+    if (superAdminRows.length === 0) {
+      const hashedPassword = await bcrypt.hash('superadmin123', 10);
+      await db.query('INSERT INTO users (email, password, name, role) VALUES (?, ?, ?, ?)', 
+        ['superadmin@techlyse.com', hashedPassword, 'System Super Admin', 'super-admin']);
+      console.log('Super-admin user seeded into database.');
+    }
   } catch (err) {
     console.error('Database initialization failed:', err);
   }
@@ -423,7 +431,7 @@ app.get('/api/tickets/:id/attachments', authenticateJWT, async (req: any, res) =
   if (db) {
     try {
       let query = 'SELECT * FROM attachments WHERE ticketId = ?';
-      if (req.user.role !== 'admin' && req.user.role !== 'support') {
+      if (req.user.role !== 'admin' && req.user.role !== 'support' && req.user.role !== 'super-admin') {
         query += ' AND isInternal = FALSE';
       }
       const [rows] = await db.query(query, [id]);
@@ -451,7 +459,8 @@ app.get('/api/tags', authenticateJWT, async (req: any, res) => {
 });
 
 app.post('/api/tickets/:id/tags', authenticateJWT, async (req: any, res) => {
-  if (req.user.role !== 'admin' && req.user.role !== 'support') return res.status(403).json({ message: 'Staff access required' });
+  const isStaff = req.user.role === 'admin' || req.user.role === 'support' || req.user.role === 'super-admin';
+  if (!isStaff) return res.status(403).json({ message: 'Staff access required' });
   const { id } = req.params;
   const { tagName, color } = req.body;
   
@@ -611,7 +620,7 @@ app.post('/api/external/v1/auth', async (req, res) => {
 
 // Secure Login API
 app.post('/api/auth/secure-link', authenticateJWT, async (req: any, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin access required' });
+  if (req.user.role !== 'admin' && req.user.role !== 'super-admin') return res.status(403).json({ message: 'Admin access required' });
   const { userId } = req.body;
   
   const token = crypto.randomBytes(32).toString('hex');
@@ -673,7 +682,7 @@ app.post('/api/auth/login-secure', async (req, res) => {
 
 // User Management API
 app.get('/api/admin/users', authenticateJWT, async (req: any, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin access required' });
+  if (req.user.role !== 'admin' && req.user.role !== 'super-admin') return res.status(403).json({ message: 'Admin access required' });
   
   const page = parseInt(req.query.page as string) || 1;
   const limit = parseInt(req.query.limit as string) || 10;
@@ -815,14 +824,16 @@ app.get('/api/tickets', authenticateJWT, async (req: any, res) => {
       // First, get user's roles to check for 'manager' (superadmin)
       const [userRoles]: any = await db.query('SELECT role FROM user_roles WHERE userId = ?', [req.user.id]);
       const rolesList = userRoles.map((r: any) => r.role);
-      const isSuperAdmin = rolesList.includes('manager');
+      const isSuperAdmin = rolesList.includes('manager') || req.user.role === 'super-admin';
 
       let query = `
         SELECT t.*, a.name as appName, u.name as assignedName, 
+               c.name as customerName, c.email as customerEmail,
                (SELECT GROUP_CONCAT(role SEPARATOR ' / ') FROM user_roles WHERE userId = t.assignedTo) as assignedRole
         FROM tickets t 
         LEFT JOIN apps a ON t.appId = a.id
         LEFT JOIN users u ON t.assignedTo = u.id
+        LEFT JOIN users c ON t.userId = c.id
       `;
       let params: any[] = [];
       let whereClauses: string[] = [];
@@ -860,10 +871,12 @@ app.get('/api/tickets/:id', authenticateJWT, async (req: any, res) => {
     try {
       const [rows]: any = await db.query(`
         SELECT t.*, a.name as appName, u.name as assignedName, 
+               c.name as customerName, c.email as customerEmail,
                (SELECT GROUP_CONCAT(role SEPARATOR ' / ') FROM user_roles WHERE userId = t.assignedTo) as assignedRole
         FROM tickets t 
         LEFT JOIN apps a ON t.appId = a.id 
         LEFT JOIN users u ON t.assignedTo = u.id
+        LEFT JOIN users c ON t.userId = c.id
         WHERE t.id = ?
       `, [id]);
       if (rows.length === 0) return res.status(404).json({ message: 'Ticket not found' });
@@ -872,12 +885,16 @@ app.get('/api/tickets/:id', authenticateJWT, async (req: any, res) => {
       if (req.user.role === 'user' && ticket.userId !== req.user.id) {
         return res.status(403).json({ message: 'You do not have permission to view this ticket' });
       }
-      if (req.user.role === 'support' && ticket.assignedTo !== req.user.id) {
+      
+      const isStaff = req.user.role === 'admin' || req.user.role === 'support' || req.user.role === 'super-admin';
+      const isSuperAdmin = req.user.role === 'super-admin';
+      
+      if (!isSuperAdmin && req.user.role === 'support' && ticket.assignedTo !== req.user.id) {
         return res.status(403).json({ message: 'You do not have permission to view this ticket (unassigned)' });
       }
 
       // Protect internal notes
-      if (req.user.role !== 'admin' && req.user.role !== 'support') {
+      if (!isStaff) {
         delete ticket.internalNotes;
       }
       
@@ -907,7 +924,7 @@ app.get('/api/tickets/:id/messages', authenticateJWT, async (req: any, res) => {
       const params: any[] = [id];
 
       // Only staff can see internal messages
-      if (req.user.role !== 'admin' && req.user.role !== 'support') {
+      if (req.user.role !== 'admin' && req.user.role !== 'support' && req.user.role !== 'super-admin') {
         query += ' AND m.isInternal = FALSE';
       }
 
@@ -953,15 +970,18 @@ app.get('/api/tickets/:id/messages', authenticateJWT, async (req: any, res) => {
     const db = await getDb();
     if (db) {
       try {
-        const [rows]: any = await db.query('SELECT * FROM users WHERE email = ? AND role = ?', [email, role]);
+        const [rows]: any = await db.query('SELECT * FROM users WHERE email = ?', [email]);
         if (rows.length > 0) {
           const user = rows[0];
+          const isStaff = user.role === 'admin' || user.role === 'support' || user.role === 'super-admin';
+          if (!isStaff) return res.status(401).json({ message: 'Unauthorized role' });
+
           const isMatch = await bcrypt.compare(password, user.password);
           if (isMatch) {
             const [roles]: any = await db.query('SELECT role FROM user_roles WHERE userId = ?', [user.id]);
             const userRoles = roles.map((r: any) => r.role);
-            const token = jwt.sign({ email, role, id: user.id, roles: userRoles }, JWT_SECRET, { expiresIn: '24h' });
-            return res.json({ token, user: { email, role, id: user.id, name: user.name, roles: userRoles } });
+            const token = jwt.sign({ email, role: user.role, id: user.id, roles: userRoles }, JWT_SECRET, { expiresIn: '24h' });
+            return res.json({ token, user: { email, role: user.role, id: user.id, name: user.name, roles: userRoles } });
           }
         }
         return res.status(401).json({ message: 'Invalid credentials' });
@@ -972,12 +992,14 @@ app.get('/api/tickets/:id/messages', authenticateJWT, async (req: any, res) => {
     }
 
     // Fallback for demo when DB is not configured
-    const isValid = (email === 'admin@techlyse.com' && password === 'admin123' && role === 'admin');
+    const isValid = (email === 'admin@techlyse.com' && password === 'admin123' && role === 'admin') ||
+                    (email === 'superadmin@techlyse.com' && password === 'superadmin123' && role === 'super-admin');
 
     if (isValid) {
       const mockId = 999999;
-      const token = jwt.sign({ email, role, id: mockId }, JWT_SECRET, { expiresIn: '24h' });
-      res.json({ token, user: { email, role, id: mockId, name: 'Support Admin' } });
+      const finalRole = email === 'superadmin@techlyse.com' ? 'super-admin' : role;
+      const token = jwt.sign({ email, role: finalRole, id: mockId }, JWT_SECRET, { expiresIn: '24h' });
+      res.json({ token, user: { email, role: finalRole, id: mockId, name: email === 'superadmin@techlyse.com' ? 'System Super Admin' : 'Support Admin' } });
     } else {
       res.status(401).json({ message: 'Invalid credentials' });
     }
@@ -991,7 +1013,7 @@ app.get('/api/admin/canned-responses', authenticateJWT, (req, res) => {
 
 // Assign Ticket API
 app.patch('/api/tickets/:id/assign', authenticateJWT, async (req: any, res) => {
-  const isStaff = req.user.role === 'admin' || req.user.role === 'support';
+  const isStaff = req.user.role === 'admin' || req.user.role === 'support' || req.user.role === 'super-admin';
   if (!isStaff) return res.status(403).json({ message: 'Only team members can assign tickets' });
   
   const { id } = req.params;
@@ -1037,7 +1059,8 @@ app.patch('/api/tickets/:id/assign', authenticateJWT, async (req: any, res) => {
 
 // Update Ticket Status API
 app.patch('/api/tickets/:id/status', authenticateJWT, async (req: any, res) => {
-  if (req.user.role !== 'admin' && req.user.role !== 'support') return res.status(403).json({ message: 'Staff access required' });
+  const isStaff = req.user.role === 'admin' || req.user.role === 'support' || req.user.role === 'super-admin';
+  if (!isStaff) return res.status(403).json({ message: 'Staff access required' });
   
   const { id } = req.params;
   const { status } = req.body;
@@ -1096,11 +1119,12 @@ app.patch('/api/tickets/:id/reopen', authenticateJWT, async (req: any, res) => {
       if (ticketRows.length === 0) return res.status(404).json({ message: 'Ticket not found' });
       
       const ticket = ticketRows[0];
-      if (ticket.userId !== userId && req.user.role !== 'admin' && req.user.role !== 'support') {
+      const isStaff = req.user.role === 'admin' || req.user.role === 'support' || req.user.role === 'super-admin';
+      if (ticket.userId !== userId && !isStaff) {
         return res.status(403).json({ message: 'Access denied' });
       }
 
-      if (req.user.role !== 'admin' && req.user.role !== 'support' && (ticket.status !== 'resolved' || ticket.rating !== null)) {
+      if (!isStaff && (ticket.status !== 'resolved' || ticket.rating !== null)) {
         return res.status(400).json({ message: 'Cannot reopen ticket after feedback or if not resolved' });
       }
 
@@ -1124,7 +1148,7 @@ app.get('/api/tickets/:id/internal-updates', authenticateJWT, async (req: any, r
       const [tickets]: any = await db.query('SELECT assignedTo FROM tickets WHERE id = ?', [id]);
       if (tickets.length === 0) return res.status(404).json({ message: 'Ticket not found' });
       
-      const isAdmin = req.user.role === 'admin';
+      const isAdmin = req.user.role === 'admin' || req.user.role === 'super-admin';
       const isSupport = req.user.role === 'support';
       const isAssigned = tickets[0].assignedTo === req.user.id;
 
@@ -1159,7 +1183,7 @@ app.post('/api/tickets/:id/internal-updates', authenticateJWT, async (req: any, 
       const [tickets]: any = await db.query('SELECT assignedTo FROM tickets WHERE id = ?', [id]);
       if (tickets.length === 0) return res.status(404).json({ message: 'Ticket not found' });
       
-      const isAdmin = req.user.role === 'admin';
+      const isAdmin = req.user.role === 'admin' || req.user.role === 'super-admin';
       const isSupport = req.user.role === 'support';
       const isAssigned = tickets[0].assignedTo === req.user.id;
 
@@ -1181,7 +1205,7 @@ app.post('/api/tickets/:id/internal-updates', authenticateJWT, async (req: any, 
 });
 
 app.patch('/api/tickets/:id', authenticateJWT, async (req: any, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin access required' });
+  if (req.user.role !== 'admin' && req.user.role !== 'super-admin') return res.status(403).json({ message: 'Admin access required' });
   const { id } = req.params;
   const { internalNotes, priority, category } = req.body;
   
@@ -1211,7 +1235,7 @@ app.patch('/api/tickets/:id', authenticateJWT, async (req: any, res) => {
 
 // Delete Ticket API (with file cleanup)
 app.delete('/api/tickets/:id', authenticateJWT, async (req: any, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin access required' });
+  if (req.user.role !== 'admin' && req.user.role !== 'super-admin') return res.status(403).json({ message: 'Admin access required' });
   const { id } = req.params;
 
   const db = await getDb();
@@ -1253,7 +1277,7 @@ app.delete('/api/tickets/:id', authenticateJWT, async (req: any, res) => {
 
 // Feedback Statistics API
 app.get('/api/admin/feedback-stats', authenticateJWT, async (req: any, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin access required' });
+  if (req.user.role !== 'admin' && req.user.role !== 'super-admin') return res.status(403).json({ message: 'Admin access required' });
   
   const page = parseInt(req.query.page as string) || 1;
   const limit = parseInt(req.query.limit as string) || 5;

@@ -32,7 +32,7 @@ function ProtectedRoute({ children, role }: { children: ReactNode, role?: 'user'
   if (!isAuthenticated) return <Navigate to={`/login?role=${role === 'staff' ? 'admin' : (role || 'user')}`} replace />;
   
   if (role === 'staff') {
-    if (user?.role !== 'admin' && user?.role !== 'support') return <Navigate to="/" replace />;
+    if (user?.role !== 'admin' && user?.role !== 'support' && user?.role !== 'super-admin') return <Navigate to="/" replace />;
   } else if (role && user?.role !== role) {
     return <Navigate to="/" replace />;
   }

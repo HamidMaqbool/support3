@@ -25,6 +25,12 @@ export interface Message {
   replyToId?: number | string;
   isSystem?: boolean;
   isInternal?: boolean;
+  sender?: {
+    id: number | string;
+    name: string;
+    role?: string;
+    avatar?: string;
+  };
 }
 
 export interface Ticket {
@@ -38,6 +44,8 @@ export interface Ticket {
   isInternal?: boolean | number;
   assignedTo?: number | string;
   assignedName?: string;
+  customerName?: string;
+  customerEmail?: string;
   appName?: string;
   rating?: number;
   feedback?: string;

@@ -186,7 +186,7 @@ export default function UserDashboard() {
       });
       if (res.ok) {
         const data = await res.json();
-        setAdmins(data.users.filter((u: any) => u.role === 'admin'));
+        setAdmins(data.users.filter((u: any) => u.role === 'admin' || u.role === 'super-admin'));
       }
     } catch (err) {
       console.error('Failed to fetch admins:', err);

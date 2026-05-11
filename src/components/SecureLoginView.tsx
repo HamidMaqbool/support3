@@ -39,7 +39,8 @@ export default function SecureLoginView() {
           
           toast.success('Secure login successful');
           
-          const destination = data.user.role === 'admin' ? '/admin' : '/user';
+          const isStaff = data.user.role === 'admin' || data.user.role === 'support' || data.user.role === 'super-admin';
+          const destination = isStaff ? '/admin' : '/user';
           
           // Use a hard redirect for magic link login to ensure full app re-init with new permissions.
           // Small delay (100ms) ensures Zustand persistence finishes writing to localStorage.

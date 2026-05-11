@@ -499,8 +499,8 @@ export default function TicketDetailView({ portal }: Props) {
   const [admins, setAdmins] = useState<any[]>([]);
   const [isAssigning, setIsAssigning] = useState(false);
 
-  const isStaff = user?.role === 'admin' || user?.role === 'support';
-  const isAdmin = user?.role === 'admin';
+  const isStaff = user?.role === 'admin' || user?.role === 'support' || user?.role === 'super-admin';
+  const isAdmin = user?.role === 'admin' || user?.role === 'super-admin';
 
   useEffect(() => {
     const fetchAdmins = async () => {
@@ -511,7 +511,7 @@ export default function TicketDetailView({ portal }: Props) {
           });
           if (res.ok) {
             const data = await res.json();
-            setAdmins(data.users.filter((u: any) => u.role === 'admin'));
+            setAdmins(data.users.filter((u: any) => u.role === 'admin' || u.role === 'super-admin'));
           }
         } catch (err) {
           console.error('Failed to fetch admins:', err);
@@ -697,7 +697,11 @@ export default function TicketDetailView({ portal }: Props) {
 
   if (!ticket) return <div>Ticket not found</div>;
 
-  const requestor = MOCK_USERS.find(u => u.id === ticket.userId) || { name: 'Customer', avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${ticket.userId}`, email: 'customer@example.com' };
+  const requestor = {
+    name: ticket.customerName || MOCK_USERS.find(u => u.id === ticket.userId)?.name || 'Customer',
+    avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${ticket.userId}`,
+    email: ticket.customerEmail || MOCK_USERS.find(u => u.id === ticket.userId)?.email || 'customer@example.com'
+  };
 
   const handleCreateTicket = async (e: FormEvent) => {
     e.preventDefault();
@@ -955,7 +959,7 @@ export default function TicketDetailView({ portal }: Props) {
           ref={scrollRef}
           onScroll={handleScroll}
         >
-          <div className="max-w-4xl mx-auto space-y-8 pb-10">
+          <div className={`${portal === 'admin' ? 'max-w-5xl' : 'max-w-4xl'} mx-auto space-y-8 pb-10`}>
             {hasMore && (
               <div className="flex justify-center p-4">
                 <Button variant="ghost" size="sm" className="text-slate-400 text-[10px] font-bold uppercase tracking-widest" disabled={isFetchingMore}>
@@ -1235,7 +1239,7 @@ export default function TicketDetailView({ portal }: Props) {
 
         {ticket?.status !== 'resolved' && (
           <div className="p-6 bg-white border-t border-slate-200 z-10 shrink-0">
-            <div className="max-w-4xl mx-auto space-y-4">
+            <div className={`${portal === 'admin' ? 'max-w-5xl' : 'max-w-4xl'} mx-auto space-y-4`}>
                {replyingTo && (
                  <motion.div 
                    initial={{ opacity: 0, y: 10 }}
@@ -1397,7 +1401,7 @@ export default function TicketDetailView({ portal }: Props) {
         )}
       </div>
 
-      <div className="hidden lg:flex w-80 flex-col border-l border-slate-200 h-full bg-white shrink-0">
+      <div className={`hidden lg:flex ${portal === 'admin' ? 'w-[450px]' : 'w-80'} flex-col border-l border-slate-200 h-full bg-white shrink-0`}>
         <div className="h-12 border-b border-slate-100 flex items-center px-4 gap-4 shrink-0">
           <button 
             onClick={() => setActiveSidebarTab('details')}
@@ -1559,7 +1563,7 @@ export default function TicketDetailView({ portal }: Props) {
                 </div>
                 
                 {/* Timeline UI */}
-                <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
                   {internalUpdates.length === 0 ? (
                     <div className="text-center py-8">
                        <p className="text-[10px] text-slate-400 font-bold uppercase italic">No entries in journal</p>
@@ -1605,7 +1609,7 @@ export default function TicketDetailView({ portal }: Props) {
                       value={newUpdateContent}
                       onChange={(e) => setNewUpdateContent(e.target.value)}
                       placeholder="Enter operational findings..."
-                      className="min-h-[80px] bg-white border-0 shadow-sm rounded-xl text-xs leading-relaxed resize-none focus-visible:ring-1 focus-visible:ring-slate-200"
+                      className="min-h-[150px] bg-white border-0 shadow-sm rounded-xl text-xs leading-relaxed resize-none focus-visible:ring-1 focus-visible:ring-slate-200"
                     />
                     {newUpdateImage && (
                       <div className="relative inline-block mt-2">
